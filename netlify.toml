@@ -1,0 +1,15 @@
+# Netlify: gewoon de hele map publiceren, geen build nodig.
+[build]
+  publish = "."
+
+# Het bestand dat de offline-werking regelt mag nooit lang onthouden worden,
+# anders komt een nieuwe versie van de app te laat bij je vader aan.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Content-Type = "application/manifest+json"

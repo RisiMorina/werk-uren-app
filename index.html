@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Uren</title>
+  <meta name="description" content="Werkuren van je mensen bijhouden.">
+  <meta name="theme-color" content="#1B4F8F">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Uren">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <header class="balk">
+    <h1 id="titel">Uren invullen</h1>
+  </header>
+
+  <div id="banner" class="banner" hidden></div>
+
+  <main id="scherm" class="scherm"></main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <nav class="tabs" aria-label="Hoofdmenu">
+    <button class="tab" data-tab="invullen">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      <span>Invullen</span>
+    </button>
+    <button class="tab" data-tab="week">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>
+      <span>Week</span>
+    </button>
+    <button class="tab" data-tab="mensen">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5"/><circle cx="17.5" cy="9" r="2.4"/><path d="M17 14.6c2.5.2 4.5 1.9 4.5 4.4"/></svg>
+      <span>Mensen</span>
+    </button>
+  </nav>
+
+  <dialog id="dlg" class="dlg"></dialog>
+
+  <noscript><p style="padding:24px">Deze app heeft JavaScript nodig.</p></noscript>
+  <script src="js/logic.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
