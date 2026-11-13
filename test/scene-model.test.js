@@ -114,4 +114,92 @@ assert.strictEqual(f4.state, 'toWork');
 assert.strictEqual(M.helmColor('a'), M.helmColor('a'));
 assert.notStrictEqual(M.helmColor('a'), M.helmColor('b'));
 
+// ---- kijkrichting: naar het werk, naar waar je loopt, op de bank naar het gebouw ----
+{
+  const face = (f) => ({ c: Math.cos(f.angle), s: Math.sin(f.angle) });
+  const mk = (trade, id) => {
+    const l = M.layout([{ id, trade }]);
+    return M.makeFigure({ id, trade }, true, l[id]);
+  };
+  assert.ok(face(mk('elektricien', 'e')).s < -0.5, 'electrician faces the back wall (up in world y)');
+  assert.ok(face(mk('schilder', 's')).c < -0.7, 'painter faces the white wall (left, -x)');
+  assert.ok(face(mk('loodgieter', 'l')).s > 0.5, 'plumber faces the pipes (+y)');
+  assert.ok(face(mk('timmerman', 't')).s < -0.5, 'carpenter faces the frame');
+  const seated = M.makeFigure({ id: 'b', trade: 'overig' }, false, M.layout([{ id: 'b', trade: 'overig' }]).b);
+  assert.ok(Math.abs(Math.abs(seated.angle) - Math.PI) < 1e-9, 'seated figures face the building (-x)');
+
+  // lopend kijk je de kant op waar je heen loopt
+  const w = M.makeFigure({ id: 'w', trade: 'schilder' }, false, M.layout([{ id: 'w', trade: 'schilder' }]).w);
+  M.setClocked(w, true, M.layout([{ id: 'w', trade: 'schilder' }]).w);
+  const t0 = w.path[0];
+  M.update(w, 0.2);
+  assert.ok(Math.abs(w.angle - Math.atan2(t0.y - 0.8, t0.x - 9.55)) < 0.4 || w.moving, 'walking faces the way it goes');
+  assert.strictEqual(w.moving, true);
+  M.update(w, 100);
+  assert.ok(face(w).c < -0.7, 'back at the wall the painter faces it again');
+}
+
+// ---- rondlopen: af en toe naar een voorraad of een stukje verderop, en weer terug ----
+{
+  let seed = 7;
+  const rand = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  const lay2 = M.layout([{ id: 'a', trade: 'elektricien' }]);
+  const f = M.makeFigure({ id: 'a', trade: 'elektricien' }, true, lay2.a);
+  M.wander(f, 0.1, rand);
+  assert.strictEqual(f.path.length, 0, 'does not wander right away');
+  M.wander(f, 100, rand);
+  assert.ok(f.path.length > 0, 'after a while it goes somewhere');
+  assert.strictEqual(f.state, 'working', 'still counts as working');
+  M.update(f, 100);
+  M.wander(f, 0.1, rand);
+  assert.strictEqual(f.path.length, 0, 'pauses where it arrived');
+  M.wander(f, 100, rand);
+  assert.ok(f.path.length > 0, 'then walks back');
+  M.update(f, 100);
+  assert.strictEqual(f.x, lay2.a.spot.x, 'back at its own spot, exactly');
+  assert.strictEqual(f.y, lay2.a.spot.y);
+  assert.strictEqual(f.wanderPhase, null);
+
+  // every place it can walk to is inside the building and outside the props
+  const inRect = (p, r) => p.x > r.x0 && p.x < r.x1 && p.y > r.y0 && p.y < r.y1;
+  const trades = ['elektricien', 'vloerlegger', 'schilder', 'loodgieter', 'timmerman', 'overig'];
+  for (const trade of trades) {
+    const all = Array.from({ length: 16 }, (_, i) => ({ id: trade + i, trade }));
+    const L2 = M.layout(all);
+    for (const p of all) {
+      const g = M.makeFigure(p, true, L2[p.id]);
+      for (let k = 0; k < 12; k++) {
+        M.wander(g, 100, rand);
+        if (g.path.length) {
+          const target = g.path[g.path.length - 1];
+          assert.ok(target.x >= 0.4 && target.x <= 7.6 && target.y >= 0.4 && target.y <= 5.5, trade + ' target inside the building');
+          assert.ok(!M.OBSTACLES.some((r) => inRect(target, r)), trade + ' target not inside a prop');
+        }
+        M.update(g, 100); M.wander(g, 100, rand); M.update(g, 100);
+      }
+    }
+  }
+
+  // nobody wanders from the bench or while walking in or out
+  const bench = M.makeFigure({ id: 'b', trade: 'overig' }, false, M.layout([{ id: 'b', trade: 'overig' }]).b);
+  M.wander(bench, 1000, rand);
+  assert.strictEqual(bench.path.length, 0, 'bench stays put');
+  const going = M.makeFigure({ id: 'g', trade: 'overig' }, false, M.layout([{ id: 'g', trade: 'overig' }]).g);
+  M.setClocked(going, true, M.layout([{ id: 'g', trade: 'overig' }]).g);
+  const before = going.path.length;
+  M.wander(going, 1000, rand);
+  assert.strictEqual(going.path.length, before, 'walking to work is not interrupted');
+
+  // clocked out in the middle of a wander: goes straight to the bench, nothing left over
+  const h = M.makeFigure({ id: 'h', trade: 'schilder' }, true, M.layout([{ id: 'h', trade: 'schilder' }]).h);
+  M.wander(h, 100, rand);
+  M.setClocked(h, false, M.layout([{ id: 'h', trade: 'schilder' }]).h);
+  assert.strictEqual(h.state, 'toBench');
+  assert.strictEqual(h.wanderPhase, null);
+  M.update(h, 100);
+  assert.strictEqual(h.state, 'bench');
+  M.wander(h, 1000, rand);
+  assert.strictEqual(h.path.length, 0);
+}
+
 console.log('Alle scene-tests zijn goed.');

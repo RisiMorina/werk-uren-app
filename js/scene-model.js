@@ -87,23 +87,101 @@
     return path;
   }
 
+  // ---------- kijkrichting ----------
+  function angleTo(from, to) {
+    var dx = to.x - from.x, dy = to.y - from.y;
+    return Math.hypot(dx, dy) < 1e-6 ? 0 : Math.atan2(dy, dx);
+  }
+  // Waar kijkt iemand naar als hij staat te werken (hoek in de wereld, 0 = naar +x)
+  function faceFor(trade, p) {
+    if (trade === 'elektricien') return p.y < 2.5 ? -Math.PI / 2 : angleTo(p, { x: 2.5, y: 0.3 });   // meterkast aan de achtermuur
+    if (trade === 'schilder') return p.x < 3 ? Math.PI : angleTo(p, { x: 0.3, y: 3.2 });             // witte muur links
+    if (trade === 'timmerman') return Math.hypot(p.x - 6.85, p.y - 1.4) < 1.6 ? -Math.PI / 2 : angleTo(p, { x: 6.85, y: 1.4 }); // het frame
+    if (trade === 'loodgieter') return p.y > 3.8 ? Math.PI / 2 : angleTo(p, { x: 4.5, y: 5.45 });    // leidingen voor
+    if (trade === 'vloerlegger') return Math.PI;                                                       // naar het stuk vloer dat nog moet
+    return angleTo(p, { x: 1.0, y: 4.0 });                                                             // overig: naar de planken
+  }
+  function restAngle(fig) {
+    if (fig.state === 'bench' || fig.state === 'toBench') return Math.PI;  // op de bank kijk je naar het gebouw
+    if (fig.lookAt && (fig.wanderPhase === 'out' || fig.wanderPhase === 'pause')) return angleTo(fig, fig.lookAt);
+    return faceFor(fig.trade, fig);
+  }
+
+  // ---------- rondlopen ----------
+  // Voorraad per beroep: waar loop je af en toe naartoe, en waar kijk je dan naar
+  var SUPPLY = {
+    elektricien: { x: 4.4, y: 1.45, look: { x: 4.4, y: 0.75 } },     // kabelhaspel
+    vloerlegger: { x: 4.75, y: 2.3, look: { x: 3.9, y: 2.3 } },      // stapel tegels
+    schilder: { x: 1.45, y: 1.3, look: { x: 1.45, y: 2.1 } },        // verfemmer
+    loodgieter: { x: 2.2, y: 4.85, look: { x: 2.2, y: 5.45 } },      // gereedschap bij de leidingen
+    timmerman: { x: 5.4, y: 1.6, look: { x: 6.2, y: 1.6 } },         // naar het frame
+    overig: { x: 1.5, y: 4.8, look: { x: 1.5, y: 4.1 } }             // stapel planken
+  };
+  function inObstacle(p) {
+    return OBSTACLES.some(function (r) { return p.x > r.x0 && p.x < r.x1 && p.y > r.y0 && p.y < r.y1; });
+  }
+  function startTrip(fig, rand) {
+    var spot = fig.slot.spot, target = null;
+    if (rand() < 0.55) {
+      var sp = SUPPLY[fig.trade] || SUPPLY.overig;
+      target = { x: sp.x, y: sp.y };
+      fig.lookAt = sp.look;
+    } else {
+      for (var k = 0; k < 6 && !target; k++) {
+        var a = rand() * Math.PI * 2, r = 0.6 + rand() * 0.6;
+        var c = {
+          x: Math.min(7.6, Math.max(0.4, spot.x + Math.cos(a) * r)),
+          y: Math.min(5.5, Math.max(0.4, spot.y + Math.sin(a) * r))
+        };
+        if (!inObstacle(c)) target = c;
+      }
+      fig.lookAt = null;
+      if (!target) { var s2 = SUPPLY[fig.trade] || SUPPLY.overig; target = { x: s2.x, y: s2.y }; fig.lookAt = s2.look; }
+    }
+    fig.path = [target];
+    fig.wanderPhase = 'out';
+  }
+  // Af en toe een stukje lopen en weer terug. Alleen als je aan het werk bent en stilstaat.
+  function wander(fig, dt, rand) {
+    rand = rand || Math.random;
+    if (fig.state !== 'working' || !fig.slot) return;
+    if (fig.wanderPhase === 'out') {
+      if (!fig.path.length) { fig.wanderPhase = 'pause'; fig.pause = 1.5 + rand() * 2.5; }
+      return;
+    }
+    if (fig.wanderPhase === 'pause') {
+      fig.pause -= dt;
+      if (fig.pause <= 0) { fig.path = [{ x: fig.slot.spot.x, y: fig.slot.spot.y }]; fig.wanderPhase = 'back'; fig.lookAt = null; }
+      return;
+    }
+    if (fig.path.length) return;
+    fig.idle -= dt;
+    if (fig.idle <= 0) startTrip(fig, rand);
+  }
+
   function makeFigure(emp, clockedIn, slot) {
     var at = clockedIn ? slot.spot : slot.seat;
-    return {
-      id: emp.id, trade: normTrade(emp.trade), color: helmColor(emp.id),
+    var fig = {
+      id: emp.id, trade: normTrade(emp.trade), color: helmColor(emp.id), slot: slot,
       x: at.x, y: at.y, angle: 0, moving: false, path: [],
-      state: clockedIn ? 'working' : 'bench'
+      state: clockedIn ? 'working' : 'bench',
+      wanderPhase: null, lookAt: null, pause: 0, idle: 2 + Math.random() * 6
     };
+    fig.angle = restAngle(fig);
+    return fig;
   }
 
   function setClocked(fig, clockedIn, slot) {
+    fig.slot = slot;
     if (clockedIn) {
       if (fig.state === 'working' || fig.state === 'toWork') return;
       fig.state = 'toWork';
+      fig.wanderPhase = null; fig.lookAt = null;
       fig.path = route(fig, slot.spot);
     } else {
       if (fig.state === 'bench' || fig.state === 'toBench') return;
       fig.state = 'toBench';
+      fig.wanderPhase = null; fig.lookAt = null;
       fig.path = route(fig, slot.seat);
     }
   }
@@ -123,15 +201,17 @@
       }
     }
     if (!fig.path.length) {
-      if (fig.state === 'toWork') { fig.state = 'working'; fig.moving = false; }
+      if (fig.state === 'toWork') { fig.state = 'working'; fig.moving = false; fig.idle = 2 + Math.random() * 6; }
       else if (fig.state === 'toBench') { fig.state = 'bench'; fig.moving = false; }
+      if (fig.wanderPhase === 'back') { fig.wanderPhase = null; fig.idle = 3 + Math.random() * 6; }
     }
+    if (!fig.moving) fig.angle = restAngle(fig);
   }
 
   var api = {
     TILE_W: TILE_W, TILE_H: TILE_H, WORLD: WORLD, DOOR_OUT: DOOR_OUT, DOOR_IN: DOOR_IN,
     iso: iso, SPOT_POOL: SPOT_POOL, HOME: HOME, OBSTACLES: OBSTACLES, benchSeat: benchSeat, layout: layout, helmColor: helmColor,
-    makeFigure: makeFigure, setClocked: setClocked, update: update
+    makeFigure: makeFigure, setClocked: setClocked, update: update, wander: wander, restAngle: restAngle, SUPPLY: SUPPLY
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.SceneModel = api;

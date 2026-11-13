@@ -1,5 +1,5 @@
-/* Werkvloer: tekent de scene op een canvas. Alles is gebouwd van blokjes (kubus()).
-   De regels (plekken, lopen) staan in scene-model.js.
+/* Werkvloer: tekent de scene op een canvas. Alles is gebouwd van blokjes (kubus() en boxR()).
+   De regels (plekken, lopen, kijkrichting, rondlopen) staan in scene-model.js.
    Gebruik: Scene.mount(canvas, onTap); Scene.setPeople(lijst); Scene.start(); Scene.stop(); */
 (function (root) {
   'use strict';
@@ -10,15 +10,16 @@
   var LOW = 14;         // hoogte van de lage voor- en zijmuur
   var BENCH_H = 10;     // zithoogte van het bankje
   var TAP_RADIUS = 32;  // tikzone rond een poppetje, in schermpunten
-  var FS = 1.5;         // poppetjes zijn zo veel keer groter getekend dan hun tegels
+  var FS = 1.7;         // poppetjes zijn zo veel keer groter getekend dan hun tegels
   var SLAB = { x0: -0.6, y0: -0.6, x1: 11.9, y1: 8.2 };
 
   var C = {
-    bg: '#E3EAEE', slab: '#C3CCD2', floor: '#9AA6AE', brick: '#B5543C', white: '#F3F3F0',
-    tileA: '#E6B85C', tileB: '#D49A3A', wood: '#C98F4B', woodDark: '#A06F34', bench: '#7A5230',
-    copper: '#D08A3B', blue: '#1B4F8F', yellow: '#F2B705', grey: '#8A97A1', dark: '#33414D', skin: '#E8B98F'
+    grass: '#98B684', pad: '#C2C8CC', floor: '#A9B1B7', brick: '#B5543C', white: '#F3F3F0',
+    tileA: '#E6B85C', tileB: '#D49A3A', wood: '#C98F4B', woodDark: '#A06F34', bench: '#8A5E38',
+    copper: '#D08A3B', blue: '#1B4F8F', yellow: '#F2B705', grey: '#8A97A1', dark: '#33414D', skin: '#E8B98F',
+    glass: '#7FA3BF', jeans: '#3B4A5A', boot: '#2B3640'
   };
-  var BODY = { elektricien: '#F2B705', vloerlegger: '#E07B2D', schilder: '#F4F4F2', loodgieter: '#1B4F8F', timmerman: '#3F8F5A', overig: '#6C7A89' };
+  var BODY = { elektricien: '#E8A317', vloerlegger: '#C8642B', schilder: '#F1F1EE', loodgieter: '#2E5C99', timmerman: '#4B7F52', overig: '#6F7C88' };
 
   var canvas, ctx, tapFn = null;
   var dpr = 1, cssW = 0, cssH = 0, scale = 1, ox = 0, oy = 0;
@@ -55,7 +56,7 @@
     ctx.fillStyle = fill;
     ctx.fill();
   }
-  // Eén blok: x, y in tegels, z en h in beeldpunten, w en d in tegels. Drie zichtbare vlakken.
+  // Eén blok langs de assen: x, y in tegels, z en h in beeldpunten, w en d in tegels. Drie zichtbare vlakken.
   function kubus(x, y, z, w, d, h, color) {
     var a = iso(x, y, z + h), b = iso(x + w, y, z + h), c = iso(x + w, y + d, z + h), e = iso(x, y + d, z + h);
     poly([a, b, c, e], shade(color, 0.18));
@@ -65,28 +66,67 @@
     }
   }
   function vlak(x, y, z, w, d, color) { kubus(x, y, z, w, d, 0, color); }
+  function lijn(x0, y0, z0, x1, y1, z1, color, width) {
+    var a = iso(x0, y0, z0), b = iso(x1, y1, z1);
+    ctx.strokeStyle = color; ctx.lineWidth = width || 1;
+    ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy); ctx.stroke();
+  }
+
+  // Blok dat meedraait met een hoek. cx, cy: midden in tegels; w loopt in de kijkrichting, d dwars erop.
+  function boxR(cx, cy, z, w, d, h, ang, color) {
+    var ca = Math.cos(ang), sa = Math.sin(ang), hw = w / 2, hd = d / 2;
+    var q = [[hw, hd], [hw, -hd], [-hw, -hd], [-hw, hd]].map(function (p) {
+      return { x: cx + p[0] * ca - p[1] * sa, y: cy + p[0] * sa + p[1] * ca };
+    });
+    var normals = [[ca, sa], [sa, -ca], [-ca, -sa], [-sa, ca]];
+    var faces = [];
+    for (var i = 0; i < 4; i++) {
+      var k = normals[i][0] + normals[i][1];
+      if (k > 0.0001) faces.push({ i: i, k: k, s: (normals[i][0] - normals[i][1]) / 1.4142 });
+    }
+    faces.sort(function (a, b) { return a.k - b.k; });
+    faces.forEach(function (f) {
+      var p0 = q[f.i], p1 = q[(f.i + 1) % 4];
+      poly([iso(p0.x, p0.y, z + h), iso(p1.x, p1.y, z + h), iso(p1.x, p1.y, z), iso(p0.x, p0.y, z)], shade(color, -0.11 - 0.22 * f.s));
+    });
+    poly(q.map(function (p) { return iso(p.x, p.y, z + h); }), shade(color, 0.16));
+  }
 
   // ---------- vaste dingen: achtergrond ----------
   function drawGround() {
-    // het hele terrein als een plaat, als een speelgoedwereld
-    kubus(SLAB.x0, SLAB.y0, -8, SLAB.x1 - SLAB.x0, SLAB.y1 - SLAB.y0, 8, C.slab);
-    // vloer van het gebouw
+    // het terrein als een plaat (gras), met een betonnen plek om het gebouw en onder de bankjes
+    kubus(SLAB.x0, SLAB.y0, -8, SLAB.x1 - SLAB.x0, SLAB.y1 - SLAB.y0, 8, C.grass);
+    vlak(-0.4, -0.4, 0, 8.8, 6.8, C.pad);
+    vlak(8.9, 0.1, 0, 2.7, 7.9, C.pad);
+    // vloer van het gebouw met voegen
     kubus(0, 0, 0, 8, 6, 2, C.floor);
-    // het gelegde stuk vloer: tegels in twee kleuren
-    for (var i = 0; i < 4; i++) for (var j = 0; j < 4; j++) {
-      vlak(4 + i, 2 + j, 2, 1, 1, (i + j) % 2 ? C.tileA : C.tileB);
-    }
+    var i, j;
+    for (i = 0; i < 4; i++) for (j = 0; j < 4; j++) vlak(4 + i, 2 + j, 2, 1, 1, (i + j) % 2 ? C.tileA : C.tileB);
+    for (i = 0; i <= 8; i++) lijn(i, 0.3, 2, i, 6, 2, 'rgba(0,0,0,.07)', 1);
+    for (j = 0; j <= 6; j++) lijn(0.3, j, 2, 8, j, 2, 'rgba(0,0,0,.07)', 1);
   }
   function drawBackWalls() {
-    // achtermuur (y = 0) met meterkast en draden
+    // achtermuur (y = 0) en linkermuur (x = 0) met baksteenvoegen
     kubus(0, 0, 2, 8, 0.3, WALL, C.brick);
+    kubus(0, 0, 2, 0.3, 6, WALL, C.brick);
+    var z;
+    for (z = 11; z < WALL; z += 9) {
+      lijn(0.3, 0.3, z, 8, 0.3, z, 'rgba(255,255,255,.16)', 1);
+      lijn(0.3, 0.3, z, 0.3, 6, z, 'rgba(255,255,255,.16)', 1);
+    }
+    // ramen
+    kubus(3.9, 0.3, 34, 1.3, 0.05, 34, C.glass);
+    kubus(3.85, 0.3, 31, 1.4, 0.1, 3, C.white); kubus(3.85, 0.3, 68, 1.4, 0.1, 3, C.white);
+    kubus(4.52, 0.3, 34, 0.06, 0.08, 34, C.white);
+    kubus(0.3, 0.55, 34, 0.05, 0.8, 34, C.glass);
+    kubus(0.3, 0.5, 31, 0.1, 0.9, 3, C.white); kubus(0.3, 0.5, 68, 0.1, 0.9, 3, C.white);
+    // meterkast met een geel strookje, en draden boven het raam langs
     kubus(1.7, 0.3, 24, 1.5, 0.12, 40, C.grey);
     kubus(1.85, 0.42, 52, 0.5, 0.04, 8, C.yellow);
     ctx.strokeStyle = C.dark; ctx.lineWidth = 2;
-    var w1 = iso(3.2, 0.42, 40), w2 = iso(5.4, 0.42, 66), w3 = iso(7.4, 0.42, 30);
-    ctx.beginPath(); ctx.moveTo(w1.sx, w1.sy); ctx.lineTo(w2.sx, w2.sy); ctx.lineTo(w3.sx, w3.sy); ctx.stroke();
-    // linkermuur (x = 0), een stuk wit geschilderd
-    kubus(0, 0, 2, 0.3, 6, WALL, C.brick);
+    var w1 = iso(3.2, 0.42, 48), w2 = iso(3.6, 0.42, 76), w3 = iso(7.4, 0.42, 76), w4 = iso(7.4, 0.42, 36);
+    ctx.beginPath(); ctx.moveTo(w1.sx, w1.sy); ctx.lineTo(w2.sx, w2.sy); ctx.lineTo(w3.sx, w3.sy); ctx.lineTo(w4.sx, w4.sy); ctx.stroke();
+    // linkermuur: een stuk wit geschilderd
     kubus(0.3, 1.5, 12, 0.05, 3.6, 62, C.white);
   }
 
@@ -102,9 +142,7 @@
     [3.5, 4.34, 5.18].forEach(function (y) { box(7.75, y, 2, 0.25, 0.84, LOW, C.brick); });
     // houten frame (timmerman)
     [[6.2, 0.6], [7.5, 0.6], [6.2, 2.1], [7.5, 2.1]].forEach(function (q) { box(q[0], q[1], 2, 0.15, 0.15, 74, C.wood); });
-    for (i = 0; i < 2; i++) {
-      box(6.2 + i * 1.3, 0.6, 76, 0.15, 1.65, 7, C.woodDark);
-    }
+    for (i = 0; i < 2; i++) box(6.2 + i * 1.3, 0.6, 76, 0.15, 1.65, 7, C.woodDark);
     box(6.2, 0.6, 76, 1.45, 0.15, 7, C.woodDark);
     box(6.2, 2.1, 76, 1.45, 0.15, 7, C.woodDark);
     // leidingen (loodgieter), per tegel zodat ze goed sorteren
@@ -116,83 +154,126 @@
     box(3.7, 2.1, 2, 0.35, 0.35, 12, C.tileA);
     box(1.35, 2.0, 2, 0.22, 0.22, 10, C.blue);
     box(4.2, 0.55, 2, 0.4, 0.4, 14, C.copper);
-    // bankjes: per zitplaats een stukje, zodat poppetjes goed sorteren
+    // bankjes: per zitplaats een stukje (plank op twee poten), zodat poppetjes goed sorteren
     for (i = 0; i < 16; i++) {
       var s = M.benchSeat(i);
-      box(s.x - 0.25, s.y - 0.45, 0, 0.5, 0.9, BENCH_H, C.bench);
+      box(s.x - 0.22, s.y - 0.4, 0, 0.07, 0.8, BENCH_H - 3, C.woodDark);           // poot
+      p[p.length - 1].depth -= 0.06;
+      box(s.x - 0.25, s.y - 0.45, BENCH_H - 3, 0.5, 0.9, 3, C.bench);              // zitplank
       p[p.length - 1].depth -= 0.05;
-      box(s.x - 0.33, s.y - 0.45, BENCH_H, 0.08, 0.9, 16, C.woodDark); // rugleuning
-      p[p.length - 1].depth -= 0.1;
     }
     return p;
   }
 
   // ---------- poppetjes ----------
   function hashPhase(id) { var h = 0; for (var i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0; return (h % 628) / 100; }
+  function wrapPi(a) { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; }
+  function visual(f) { return { x: f.x, y: f.y, moving: f.moving }; }
 
-  // positie zoals getekend (de overige bouwvakker loopt heen en weer met een plank)
-  function visual(f, t) {
-    var x = f.x, y = f.y, moving = f.moving;
-    if (!reduced && f.state === 'working' && f.trade === 'overig') {
-      var s = Math.sin(t * 0.7 + f.ph);
-      x += s * 0.35;
-      moving = Math.abs(Math.cos(t * 0.7 + f.ph)) > 0.12;
-    }
-    return { x: x, y: y, moving: moving };
-  }
-
+  // Een poppetje is een stapeltje blokken dat meedraait met zijn kijkrichting (f.da).
   function drawFigure(f, t) {
-    var v = visual(f, t);
-    // het poppetje wordt groter getekend dan de tegels, anders is hij op een telefoon te klein
-    var foot = iso(v.x, v.y, 0);
+    var foot = iso(f.x, f.y, 0);
     ctx.save();
     ctx.translate(foot.sx, foot.sy);
     ctx.scale(FS, FS);
-    var x = 0, y = 0;
-    var seated = f.state === 'bench';
-    var working = f.state === 'working';
-    var tt = reduced ? 0 : t;
-    var walk = v.moving && !reduced ? Math.sin(f.walkPhase) : 0;
+    var ang = reduced ? f.angle : f.da, ca = Math.cos(ang), sa = Math.sin(ang);
+    var tt = reduced ? 0 : t, ph = f.ph;
+    var moving = f.moving && !reduced;
+    var seated = f.state === 'bench', working = f.state === 'working';
+    var pose = working && (!moving || f.trade === 'overig');   // aan het werk (overig draagt ook lopend een plank)
+    var walk = moving ? Math.sin(f.walkPhase) : 0;
     var base = seated ? BENCH_H / FS : 0;
-    var crouch = working && (f.trade === 'vloerlegger' || f.trade === 'loodgieter') ? 7 : 0;
-    var legH = (seated ? 4 : 10) - crouch / 2;
-    var bodyZ = base + legH + (seated ? 0 : 0) + Math.abs(walk) * 1.2;
-    var bodyColor = BODY[f.trade] || BODY.overig;
-    var armL = 0, armR = 0;       // armen omhoog (beeldpunten)
-    var idle = seated && !reduced ? Math.sin(tt * 1.3 + f.ph) * 0.8 : 0;
-
-    if (v.moving) { armL = walk * 5; armR = -walk * 5; }
-    var sw = (tt * 10 + f.ph);
-    if (working) {
-      if (f.trade === 'elektricien') { armR = 16 + Math.sin(tt * 4 + f.ph) * 5; armL = 8; }
-      else if (f.trade === 'vloerlegger') { armR = 2 + Math.sin(tt * 2.2 + f.ph) * 5; armL = 2 + Math.cos(tt * 2.2 + f.ph) * 5; }
-      else if (f.trade === 'schilder') { armR = 18 + Math.sin(tt * 2.6 + f.ph) * 6; armL = 4; }
-      else if (f.trade === 'loodgieter') { armR = 4 + Math.abs(Math.sin(tt * 3 + f.ph)) * 6; armL = 4; }
-      else if (f.trade === 'timmerman') { armR = 12 + Math.max(0, Math.sin(sw)) * 10; armL = 4; }
-      else if (f.trade === 'overig') { armR = 14; armL = 14; }
+    var body = BODY[f.trade] || BODY.overig;
+    var crouch = pose && !moving ? (f.trade === 'vloerlegger' ? 5 : f.trade === 'loodgieter' ? 3 : 0) : 0;
+    var legH = seated ? 0 : 11 - crouch;
+    var hip = base + legH;
+    var lean = crouch ? 0.07 : 0;
+    var parts = [];
+    function at(u, s) { return { x: u * ca - s * sa, y: u * sa + s * ca }; }
+    function part(u, s, z, w, d, h, color, extra) {
+      var p = at(u, s);
+      parts.push({ k: p.x + p.y + z * 0.004, draw: function () { boxR(p.x, p.y, z, w, d, h, ang + (extra || 0), color); } });
     }
 
-    // benen (met stapjes), lijf, armen, hoofd, helm
-    var lift1 = v.moving && !reduced ? Math.max(0, walk) * 4 : 0, lift2 = v.moving && !reduced ? Math.max(0, -walk) * 4 : 0;
-    var shoe = '#2B3640';
-    kubus(x - 0.2, y - 0.07, base + lift1, 0.13, 0.14, legH, shoe);
-    kubus(x + 0.07, y - 0.07, base + lift2, 0.13, 0.14, legH, shoe);
-    kubus(x - 0.17, y - 0.11, bodyZ, 0.34, 0.22, 16, bodyColor);
-    var topZ = bodyZ + 16;
-    kubus(x - 0.28, y - 0.05, bodyZ + 3 + armL, 0.1, 0.1, 12, bodyColor);
-    kubus(x + 0.18, y - 0.05, bodyZ + 3 + armR, 0.1, 0.1, 12, bodyColor);
-    // gereedschap in de hand
-    if (working) {
-      var hz = bodyZ + 15 + armR, hx = x + 0.2;
-      if (f.trade === 'timmerman') kubus(hx - 0.05, y - 0.05, hz, 0.1, 0.1, 9, C.dark);
-      else if (f.trade === 'schilder') kubus(hx - 0.1, y - 0.1, hz, 0.3, 0.1, 5, '#6FA8DC');
-      else if (f.trade === 'loodgieter') kubus(hx - 0.05, y - 0.05, hz, 0.08, 0.2, 4, C.grey);
-      else if (f.trade === 'vloerlegger') kubus(hx - 0.1, y - 0.1, bodyZ + 3 + armR, 0.26, 0.26, 2, C.tileA);
-      else if (f.trade === 'overig') kubus(x - 0.45, y - 0.07, topZ + 4, 0.9, 0.14, 3, C.wood);
-      else if (f.trade === 'elektricien' && !reduced && Math.sin(tt * 14 + f.ph) > 0.55) kubus(hx - 0.05, y - 0.35, hz + 10, 0.1, 0.1, 5, C.yellow);
+    // zachte schaduw op de grond (of op de bank)
+    var sh = [];
+    for (var a = 0; a < 10; a++) sh.push(iso(Math.cos(a * 0.628) * 0.3, Math.sin(a * 0.628) * 0.3, base));
+    poly(sh, 'rgba(20,30,40,.2)');
+
+    // benen
+    [-1, 1].forEach(function (sd) {
+      if (seated) {
+        part(0.1, sd * 0.085, base, 0.22, 0.12, 5, C.jeans);          // bovenbeen naar voren
+        part(0.2, sd * 0.085, 0, 0.12, 0.12, base + 3, C.jeans);      // onderbeen naar beneden
+        part(0.23, sd * 0.085, 0, 0.17, 0.13, 2.5, C.boot);
+      } else {
+        var sw = walk * sd, lift = Math.max(0, sw) * 2.5;
+        part(sw * 0.14, sd * 0.085, lift + 3, 0.12, 0.12, legH - 3, C.jeans);
+        part(sw * 0.14 + 0.02, sd * 0.085, lift, 0.17, 0.13, 3, C.boot);
+      }
+    });
+
+    // lijf met een reflecterend strookje
+    var tu = seated ? -0.02 : lean;
+    part(tu, 0, hip, 0.2, 0.32, 15, body);
+    part(tu, 0, hip + 6, 0.215, 0.335, 3, body === '#E8A317' ? '#F2F2F2' : C.yellow);
+
+    // armen: hangend (met zwaai), of naar het werk gestrekt
+    var shoulder = hip + 12;
+    var poses = null;
+    if (pose) {
+      var strike = Math.max(0, Math.sin(tt * 3.2 + ph));
+      if (f.trade === 'elektricien') poses = [{ L: 0.28, lift: 2 }, { L: 0.36, lift: 5 + 3 * Math.sin(tt * 1.6 + ph) }];
+      else if (f.trade === 'schilder') poses = [null, { L: 0.38, lift: 3 + 8 * Math.sin(tt * 1.4 + ph) }];
+      else if (f.trade === 'vloerlegger') poses = [{ L: 0.26 + 0.08 * Math.sin(tt * 1.8 + ph), lift: -7 }, { L: 0.26 + 0.08 * Math.sin(tt * 1.8 + ph), lift: -7 }];
+      else if (f.trade === 'loodgieter') poses = [{ L: 0.25, lift: -1 }, { L: 0.3, lift: -3 }];
+      else if (f.trade === 'timmerman') poses = [{ L: 0.28, lift: 1 }, { L: 0.18, lift: 3 + 9 * strike }];
+      else poses = [{ L: 0.1, lift: 10 }, { L: 0.1, lift: 10 }];   // overig houdt een plank vast
     }
-    kubus(x - 0.13, y - 0.13 + idle * 0.01, topZ + idle, 0.26, 0.26, 12, C.skin);
-    kubus(x - 0.16, y - 0.16 + idle * 0.01, topZ + 12 + idle, 0.32, 0.32, 5, f.color);
+    [-1, 1].forEach(function (sd, idx) {
+      var spec = poses && poses[idx];
+      var s = sd * 0.2;
+      if (spec) {
+        var z = shoulder + spec.lift - 5;
+        part(tu + spec.L / 2 + 0.05, s, z, spec.L, 0.09, 5, body);
+        part(tu + spec.L + 0.07, s, z, 0.09, 0.09, 5, C.skin);
+      } else {
+        var u = -walk * sd * 0.13 + tu;
+        part(u, s, shoulder - 11, 0.09, 0.09, 11, body);
+        part(u, s, shoulder - 13.5, 0.09, 0.09, 3, C.skin);
+      }
+    });
+
+    // gereedschap in de hand, alleen als je aan het werk staat
+    if (pose) {
+      var tip = poses[1] ? poses[1].L : 0.3, tz = shoulder + (poses[1] ? poses[1].lift : 0) - 5;
+      if (f.trade === 'timmerman') {
+        part(tu + tip + 0.1, 0.2, tz - 2, 0.05, 0.05, 9, C.wood);
+        part(tu + tip + 0.1, 0.2, tz + 7, 0.05, 0.14, 3, C.dark);
+      } else if (f.trade === 'schilder') {
+        part(tu + tip + 0.1, 0.2, tz - 3, 0.06, 0.06, 10, '#6FA8DC');
+      } else if (f.trade === 'loodgieter') {
+        part(tu + tip + 0.1, 0.2, tz, 0.2, 0.05, 2, C.grey, reduced ? 0 : Math.sin(tt * 2.2 + ph) * 0.7);
+      } else if (f.trade === 'vloerlegger') {
+        part(tu + 0.3, 0, shoulder - 13, 0.22, 0.22, 2, C.tileA);
+      } else if (f.trade === 'elektricien') {
+        if (!reduced && Math.sin(tt * 9 + ph) > 0.55) part(tu + tip + 0.12, 0.2, tz + 3, 0.07, 0.07, 5, C.yellow);
+      } else {
+        part(tu + 0.02, 0.0, hip + 17, 0.95, 0.12, 2.5, C.wood);   // plank
+      }
+    }
+
+    // hoofd met ogen, helm met rand
+    var hu = seated ? -0.02 : lean + (crouch ? 0.04 : 0);
+    var hz = hip + 15;
+    part(hu, 0, hz, 0.2, 0.2, 10, C.skin);
+    part(hu + 0.105, -0.05, hz + 5.5, 0.02, 0.04, 2.2, C.dark);
+    part(hu + 0.105, 0.05, hz + 5.5, 0.02, 0.04, 2.2, C.dark);
+    part(hu, 0, hz + 10, 0.27, 0.27, 4, f.color);
+    part(hu + 0.17, 0, hz + 10, 0.1, 0.22, 1.6, shade(f.color, -0.2));
+
+    parts.sort(function (p, q) { return p.k - q.k; });
+    for (var i = 0; i < parts.length; i++) parts[i].draw();
     ctx.restore();
   }
 
@@ -211,15 +292,15 @@
   var NUDGE = [0, -19, -38, -57]; // botst een naam, dan schuift hij omhoog
 
   // Naam boven elk poppetje dat niet op de bank zit. Voorste poppetjes eerst, achterste schuiven op.
-  function drawNames(t) {
+  function drawNames() {
     var taken = [];
     ctx.font = FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     var shown = list.filter(function (e) { return figs[e.id].state !== 'bench'; }).map(function (e) {
-      var v = visual(figs[e.id], t);
+      var v = visual(figs[e.id]);
       return { e: e, v: v, depth: v.x + v.y };
     }).sort(function (a, b) { return b.depth - a.depth; });
     shown.forEach(function (it) {
-      var p = iso(it.v.x, it.v.y, 44 * FS);
+      var p = iso(it.v.x, it.v.y, 41 * FS);
       var sx = ox + p.sx * scale, sy = oy + p.sy * scale - 6;
       var w = ctx.measureText(it.e.name).width + 10, rect = null;
       for (var k = 0; k < NUDGE.length; k++) {
@@ -261,7 +342,9 @@
   function render() {
     if (!ctx || !cssW) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = C.bg;
+    var g = ctx.createLinearGradient(0, 0, 0, cssH);
+    g.addColorStop(0, '#D6E4EE'); g.addColorStop(1, '#EEF3F6');
+    ctx.fillStyle = g;
     ctx.fillRect(0, 0, cssW, cssH);
     ctx.save();
     ctx.translate(ox, oy);
@@ -272,22 +355,24 @@
     var t = reduced ? 0 : clock;
     list.forEach(function (e) {
       var f = figs[e.id];
-      var v = visual(f, t);
-      items.push({ depth: v.x + v.y, draw: function () { drawFigure(f, t); } });
+      items.push({ depth: f.x + f.y, draw: function () { drawFigure(f, t); } });
     });
     items.sort(function (a, b) { return a.depth - b.depth; });
     for (var i = 0; i < items.length; i++) items[i].draw();
     ctx.restore();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    drawNames(t);
+    drawNames();
     drawBenchSummary();
   }
 
   function step(dt) {
     list.forEach(function (e) {
       var f = figs[e.id];
+      if (!reduced) M.wander(f, dt);
       M.update(f, dt);
       if (f.moving) f.walkPhase += dt * 9;
+      // vloeiend omdraaien
+      f.da = reduced ? f.angle : wrapPi(f.da + wrapPi(f.angle - f.da) * Math.min(1, dt * 9));
     });
   }
 
@@ -328,7 +413,12 @@
   function loopOff() { if (raf) { cancelAnimationFrame(raf); raf = 0; } }
 
   function snapAll() {
-    list.forEach(function (e) { M.update(figs[e.id], 1e6); });
+    list.forEach(function (e) {
+      var f = figs[e.id];
+      f.path = []; f.wanderPhase = null; f.lookAt = null;
+      M.update(f, 1e6);
+      f.da = f.angle;
+    });
   }
 
   // ---------- naar buiten ----------
@@ -340,16 +430,25 @@
       var slot = layoutMap[p.id], f = figs[p.id];
       if (!f) {
         f = figs[p.id] = M.makeFigure(p, p.clockedIn, slot);
-        f.ph = hashPhase(p.id); f.walkPhase = 0;
+        f.ph = hashPhase(p.id); f.walkPhase = 0; f.da = f.angle;
       } else {
+        var prev = f.slot;
+        var moved = !prev || prev.spot.x !== slot.spot.x || prev.spot.y !== slot.spot.y || prev.seat.x !== slot.seat.x || prev.seat.y !== slot.seat.y;
         f.trade = p.trade;
-        if (f.state === 'toWork' || f.state === 'toBench') M.update(f, 1e6);
-        var home = f.state === 'working' ? slot.spot : slot.seat;
-        f.x = home.x; f.y = home.y; // plek veranderd (iemand erbij of een ander beroep): geen gekke wandeling
-        if ((f.state === 'working') !== !!p.clockedIn) {
-          M.setClocked(f, !!p.clockedIn, slot);
-          if (reduced) M.update(f, 1e6);
+        if (moved) {
+          // plek veranderd (iemand erbij of een ander beroep): meteen naar de nieuwe plek, geen gekke wandeling
+          f.slot = slot;
+          f.path = []; f.wanderPhase = null; f.lookAt = null;
+          if (f.state === 'toWork') f.state = 'working';
+          if (f.state === 'toBench') f.state = 'bench';
+          var home = f.state === 'working' ? slot.spot : slot.seat;
+          f.x = home.x; f.y = home.y;
         }
+        var isWorking = f.state === 'working' || f.state === 'toWork';
+        if (isWorking !== !!p.clockedIn) {
+          M.setClocked(f, !!p.clockedIn, slot);
+          if (reduced) { M.update(f, 1e6); f.da = f.angle; }
+        } else if (reduced) f.da = f.angle;
       }
       return { id: p.id, name: p.name, idx: i };
     });
@@ -360,10 +459,9 @@
   function hit(clientX, clientY) {
     var r = canvas.getBoundingClientRect();
     var px = clientX - r.left, py = clientY - r.top, best = null, bestD = TAP_RADIUS;
-    var t = reduced ? 0 : clock;
     list.forEach(function (e) {
-      var f = figs[e.id], v = visual(f, t);
-      var p = iso(v.x, v.y, (f.state === 'bench' ? BENCH_H : 0) + 24 * FS);
+      var f = figs[e.id];
+      var p = iso(f.x, f.y, (f.state === 'bench' ? BENCH_H : 0) + 22 * FS);
       var d = Math.hypot(ox + p.sx * scale - px, oy + p.sy * scale - py);
       if (d <= bestD) { bestD = d; best = e.id; }
     });
@@ -392,8 +490,8 @@
   function start() { running = true; fit(); if (reduced) { snapAll(); render(); } else loopOn(); }
   function stop() { running = false; loopOff(); }
 
-  // _step en _hit zijn alleen voor testen: de animatie met de hand vooruit zetten, en tikken nabootsen
+  // _step, _hit en _state zijn alleen voor testen: de animatie met de hand vooruit zetten, tikken nabootsen
   function _step(dt) { clock += dt; step(dt); render(); }
-  function _state() { return list.map(function (e) { var f = figs[e.id]; return e.name + ':' + f.state + '@' + f.x.toFixed(1) + ',' + f.y.toFixed(1) + ' path=' + f.path.length; }); }
+  function _state() { return list.map(function (e) { var f = figs[e.id]; return e.name + ':' + f.state + '@' + f.x.toFixed(1) + ',' + f.y.toFixed(1) + ' path=' + f.path.length + ' phase=' + f.wanderPhase + ' angle=' + f.angle.toFixed(2); }); }
   root.Scene = { mount: mount, setPeople: setPeople, start: start, stop: stop, _hit: hit, _step: _step, _state: _state };
 })(typeof self !== 'undefined' ? self : this);
