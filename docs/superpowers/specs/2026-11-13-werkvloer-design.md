@@ -51,7 +51,7 @@ Deze heb ik gekozen (mijn keuze, graag nakijken):
 - **Vergeten uit te klokken:** is iemand langer dan 16 uur ingeklokt, dan toont de sheet een gele waarschuwing en moet de vader eerst de eindtijd controleren voor het opslaan. Zo komt er geen invoer van 20 uur per ongeluk in de totalen. Zijn de uren 0, dan wordt er niets opgeslagen en wordt het inklokken gewoon gewist, met een bevestiging.
 - **Tijd aanpassen:** de begintijd van het inklokken (ook voor vergeten inklokken: kies de tijd, dan geldt die). Het moment van uitklokken kan hij in dezelfde sheet aanpassen voor het opslaan.
 - **Werkplekken:** elk beroep heeft een vaste plek in het gebouw (elektricien bij de muurkast, vloerlegger op de halve vloer, schilder bij de witte muur, loodgieter bij de leidingen, timmerman bij het skelet, overig loopt heen en weer met planken). Twee mensen met hetzelfde beroep krijgen naast elkaar een eigen plek.
-- Poppetje: klein, gekleurde helm per persoon (vaste kleur uit zijn id), eigen kleding per beroep, naam in kleine letters boven het hoofd.
+- Poppetje (Eris: "gewoon 3D blokjes, hoeft niet mooi, mag grappig zijn"): een stapeltje isometrische blokjes. Een kubus als hoofd, een kleine balk als lijf, twee dunne balkjes als armen en benen die heen en weer wippen bij het lopen. Gekleurde helm per persoon (vaste kleur uit zijn id), kleur van het lijf per beroep, naam in kleine letters boven het hoofd. Bewust een beetje stijf en kluchtig; geen gezichten of details nodig. Het blijft canvas: de blokjes zijn getekende isometrische vlakken, geen echte 3D en geen Three.js.
 - Maximaal 16 poppetjes goed leesbaar. Bij meer: bankje en gebouw worden groter geschaald of de scene schuift (de bouwer kiest de simpelste manier).
 - Kleuren: het blauw en geel van de app, aangevuld met warme bouwkleuren (baksteenrood, beton, hout). Geen zwarte achtergrond met neon, geen crèmekleurig sjabloon.
 - Het eerste scherm is de demo: de scene vult de hele eerste schermhoogte (met de tabs onderaan), niet een kleine kaart boven een lijst. Boven in een dun label: "Op de werkvloer: 3 van 5".
@@ -71,7 +71,7 @@ Onder de scene (of via een knop "Lijst") staat een gewone lijst met dezelfde men
 
 - Nieuwe bestanden: `js/scene.js` (tekenen, bewegen, tikken), `js/clock.js` of uitbreiding van `logic.js` met pure inklokregels (testbaar in Node), `css/scene.css` of een blok in `app.css`.
 - Tekenen op één `<canvas>`, schaal met `devicePixelRatio`, `touch-action: manipulation`. Tikken: eerst de dichtstbijzijnde poppetje binnen een ruime tikzone (minimaal 48 px), anders niets.
-- Poppetjes zijn code-getekende vormen (ellips, rechthoeken, lijnen), geen afbeeldingen, zodat alles klein en scherp blijft.
+- Poppetjes zijn code-getekende isometrische blokjes (een hulpfunctie `kubus(x, y, z, breedte, diepte, hoogte, kleur)` met drie zijden in lichte, middel en donkere tint), geen afbeeldingen, zodat alles klein en scherp blijft. Gebouw, bankje en gereedschap gebruiken dezelfde hulpfunctie, dus de hele scene heeft één blokjes-stijl.
 - Service worker: nieuwe bestanden toevoegen aan `BESTANDEN` en `VERSIE` verhogen.
 - Tests: pure regels voor inklokken, uitklokken, middernacht, 16-uurs-controle en bewaren van `clock` in `node test/test.js`. De scene zelf controleren met schermafbeeldingen bij 375px, 768px en breed, en tikken via canvas-coördinaten.
 
