@@ -42,7 +42,9 @@ Alles staat in `localStorage` onder de sleutel `uren-data-v1`, op het apparaat z
 - Eerste tab. Isometrisch beeld van een half af gebouw met een bankje ernaast. Ingeklokte mensen lopen door de opening in de rechtermuur naar hun werkplek en doen hun beroep, de rest zit op de bank. Alleen de vader klokt in en uit, door op een poppetje of een knop in de lijst eronder te tikken.
 - Inklokken schrijft alleen `data.clock[empId]`. Uitklokken maakt een gewone invoer (`mode: "times"`, datum en begintijd van het inklokmoment, pauze uit `prefs.breakMin`) en wist de klok, dus week, totalen, CSV en back-up werken ongewijzigd.
 - Meer dan 16 uur ingeklokt: gele waarschuwing en een extra bevestiging. 24 uur of meer, of eind voor begin: kan niet opgeslagen worden tot de eindtijd klopt. 0 uur: niets opgeslagen, inklokken wordt gewist na bevestiging. Wie nog ingeklokt is kan niet op "niet meer actief" gezet worden.
-- Meer dan 6 mensen op de bank: alleen de beginletter als naam (de hele naam staat in de lijst en in het scherm bij tikken).
+- Wie op de bank zit staat in één label links onder het plaatje ("Op de bank: ..."), niet bij elk poppetje. Namen boven werkende poppetjes schuiven omhoog als ze botsen.
+- Werkplekken: een vaste pool van 16 plekken (`SPOT_POOL` in `scene-model.js`), minstens 1,2 tegel uit elkaar en niet in een voorwerp (`OBSTACLES`). Iedereen pakt de vrije plek het dichtst bij de eigen hoek van zijn beroep (`HOME`). Verplaats je een voorwerp in `scene.js`, pas dan ook `OBSTACLES` aan, anders vangt de test het niet.
+- Een pauze is hele minuten en nooit negatief (`Logic.cleanBreak`).
 - `prefers-reduced-motion`: poppetjes staan stil op hun plek en er draait geen animatielus.
 - Onder het plaatje staat altijd de lijst met dezelfde knoppen: dat is de zekere weg als het plaatje lastig is.
 - Testen in de browser: `Scene._step(seconden)` zet de animatie met de hand vooruit (de lus staat stil als het browservenster verborgen is). Haal in de ontwikkelserver oude service workers weg als de oude versie blijft hangen.
