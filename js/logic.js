@@ -176,6 +176,59 @@
     return { from: y + '-' + pad(m) + '-01', to: y + '-' + pad(m) + '-' + pad(last), label: MAANDEN[m - 1] + ' ' + y };
   }
 
+  // ---- beroepen en inklokken ----
+  var TRADES = [
+    { id: 'elektricien', label: 'Elektricien' },
+    { id: 'vloerlegger', label: 'Vloerlegger' },
+    { id: 'schilder', label: 'Schilder' },
+    { id: 'loodgieter', label: 'Loodgieter' },
+    { id: 'timmerman', label: 'Timmerman' },
+    { id: 'overig', label: 'Overig' }
+  ];
+
+  // "YYYY-MM-DDTHH:MM" in local time
+  function nowStamp(d) {
+    d = d || new Date();
+    return toISO(d) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+  function stampDate(stamp) {
+    var dp = stamp.slice(0, 10).split('-'), tp = stamp.slice(11, 16).split(':');
+    return new Date(+dp[0], +dp[1] - 1, +dp[2], +tp[0], +tp[1]);
+  }
+  function stampMinutes(a, b) {
+    return Math.round((stampDate(b) - stampDate(a)) / 60000);
+  }
+  function clockIn(data, empId, stamp) {
+    data.clock = data.clock || {};
+    if (data.clock[empId]) return false;
+    data.clock[empId] = stamp;
+    return true;
+  }
+  // What clocking out would save. Does not change data.
+  function clockOutPlan(data, empId, endStamp, breakMin) {
+    var startStamp = data.clock[empId];
+    var diff = stampMinutes(startStamp, endStamp);
+    var entry = {
+      id: uid(), empId: empId, date: startStamp.slice(0, 10), mode: 'times',
+      start: startStamp.slice(11, 16), end: endStamp.slice(11, 16),
+      breakMin: Number(breakMin) || 0, note: ''
+    };
+    var blocked = diff < 0 || diff >= 1440;
+    return {
+      entry: entry,
+      hours: blocked ? 0 : entryHours(entry),
+      tooLong: diff > 16 * 60,
+      blocked: blocked
+    };
+  }
+  function clockOutCommit(data, empId, entry) {
+    data.entries.push(entry);
+    delete data.clock[empId];
+  }
+  function clockCancel(data, empId) {
+    if (data.clock) delete data.clock[empId];
+  }
+
   function uid() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   }
@@ -187,7 +240,9 @@
     weekStart: weekStart, isoWeek: isoWeek, weekDays: weekDays, weekLabel: weekLabel,
     hoursFromTimes: hoursFromTimes, entryHours: entryHours, fmtHours: fmtHours, parseHours: parseHours,
     sumHours: sumHours, entriesFor: entriesFor, weekTable: weekTable,
-    csvFor: csvFor, monthRange: monthRange, uid: uid
+    csvFor: csvFor, monthRange: monthRange, uid: uid,
+    TRADES: TRADES, nowStamp: nowStamp, stampMinutes: stampMinutes,
+    clockIn: clockIn, clockOutPlan: clockOutPlan, clockOutCommit: clockOutCommit, clockCancel: clockCancel
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Logic = api;

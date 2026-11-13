@@ -71,4 +71,55 @@ const m = L.monthRange('2026-02');
 assert.strictEqual(m.to, '2026-02-28');
 assert.strictEqual(m.label, 'februari 2026');
 
+// ---- inklokken en uitklokken ----
+{
+  const c = { employees: [{ id: 'j', name: 'Jan', active: true, trade: 'overig' }], entries: [], clock: {} };
+  assert.strictEqual(L.clockIn(c, 'j', '2026-11-13T08:00'), true);
+  assert.strictEqual(L.clockIn(c, 'j', '2026-11-13T09:30'), false, 'second clock-in is ignored');
+  assert.strictEqual(c.clock.j, '2026-11-13T08:00', 'first stamp is kept');
+
+  let p = L.clockOutPlan(c, 'j', '2026-11-13T16:30', 30);
+  assert.strictEqual(p.hours, 8);
+  assert.strictEqual(p.tooLong, false);
+  assert.strictEqual(p.blocked, false);
+  assert.strictEqual(p.entry.date, '2026-11-13');
+  assert.strictEqual(p.entry.start, '08:00');
+  assert.strictEqual(p.entry.end, '16:30');
+  assert.strictEqual(p.entry.mode, 'times');
+  assert.strictEqual(c.entries.length, 0, 'plan does not change data');
+
+  c.clock.j = '2026-11-13T22:00';
+  p = L.clockOutPlan(c, 'j', '2026-11-14T06:00', 30);
+  assert.strictEqual(p.hours, 7.5, 'over midnight');
+  assert.strictEqual(p.entry.date, '2026-11-13', 'date is the start date');
+
+  c.clock.j = '2026-11-13T08:00';
+  p = L.clockOutPlan(c, 'j', '2026-11-14T02:00', 30); // 18 hours
+  assert.strictEqual(p.tooLong, true);
+  assert.strictEqual(p.blocked, false);
+  p = L.clockOutPlan(c, 'j', '2026-11-14T08:00', 30); // 24 hours
+  assert.strictEqual(p.blocked, true);
+  p = L.clockOutPlan(c, 'j', '2026-11-13T07:00', 30); // before start
+  assert.strictEqual(p.blocked, true);
+  p = L.clockOutPlan(c, 'j', '2026-11-13T08:10', 30);
+  assert.strictEqual(p.hours, 0);
+
+  p = L.clockOutPlan(c, 'j', '2026-11-13T16:30', 30);
+  L.clockOutCommit(c, 'j', p.entry);
+  assert.strictEqual(c.entries.length, 1);
+  assert.strictEqual(c.clock.j, undefined, 'clock key removed');
+  assert.strictEqual(L.entryHours(c.entries[0]), 8);
+
+  L.clockIn(c, 'j', '2026-11-15T08:00');
+  L.clockCancel(c, 'j');
+  assert.strictEqual(c.clock.j, undefined);
+  assert.strictEqual(c.entries.length, 1, 'cancel saves nothing');
+
+  assert.strictEqual(L.TRADES.length, 6);
+  assert.strictEqual(L.TRADES[5].label, 'Overig');
+  assert.strictEqual(L.stampMinutes('2026-11-13T08:00', '2026-11-13T09:30'), 90);
+  assert.ok(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(L.nowStamp()));
+  assert.strictEqual(L.nowStamp(new Date(2026, 10, 3, 7, 5)), '2026-11-03T07:05');
+}
+
 console.log('Alle tests zijn goed.');
