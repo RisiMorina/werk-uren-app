@@ -1,11 +1,7 @@
 {
   "version": "0.0.1",
   "configurations": [
-    {
-      "name": "uren",
-      "runtimeExecutable": "python",
-      "runtimeArgs": ["dev-server.py"],
-      "port": 8123
-    }
+    { "name": "uren", "runtimeExecutable": "python", "runtimeArgs": ["dev-server.py"], "port": 8123 },
+    { "name": "mijn-uren", "runtimeExecutable": "python", "runtimeArgs": ["single-hours-check/dev-server.py"], "port": 8124 }
   ]
 }
