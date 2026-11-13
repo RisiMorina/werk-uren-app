@@ -113,6 +113,22 @@ input:focus-visible { outline: 3px solid var(--geel); outline-offset: 2px; }
 .leeg { text-align: center; padding: 28px 12px; }
 .leeg p { color: var(--zacht); margin-bottom: 16px; }
 
+/* ---------- werkvloer ---------- */
+.vloerlabel {
+  background: var(--kaart); border-radius: 14px; padding: 10px 16px; margin-bottom: 10px;
+  display: flex; justify-content: space-between; align-items: baseline; font-weight: 600; color: var(--zacht);
+}
+.vloerlabel b { color: var(--blauw-donker); font-size: 1.2rem; }
+.scene-slot { margin-bottom: 14px; border-radius: 16px; overflow: hidden; background: #E3EAEE; }
+canvas.scene { display: block; width: 100%; height: min(70svh, 92vw); touch-action: manipulation; cursor: pointer; }
+.waarschuwing { margin-top: 12px; padding: 12px 14px; border-radius: 12px; background: var(--geel); color: #2A2100; font-weight: 700; }
+input[type="datetime-local"] {
+  width: 100%; min-height: 56px; padding: 8px 12px;
+  border: 2px solid var(--lijn); border-radius: 14px; background: var(--kaart);
+  font: inherit; font-size: 1.1rem; font-weight: 600; color: var(--inkt);
+}
+input[type="datetime-local"]:focus { border-color: var(--blauw); outline: none; }
+
 /* ---------- invullen ---------- */
 .namen { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
 .naam {

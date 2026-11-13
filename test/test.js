@@ -135,4 +135,23 @@ assert.strictEqual(m.label, 'februari 2026');
   assert.strictEqual(nothing.employees[0].trade, 'overig', 'unknown trade becomes overig');
 }
 
+// ---- wie staat er in de scene ----
+{
+  const d = {
+    employees: [
+      { id: 'a', name: 'Actief', active: true, trade: 'schilder' },
+      { id: 'b', name: 'Weg', active: false, trade: 'overig' },
+      { id: 'c', name: 'Nog ingeklokt', active: false, trade: 'timmerman' },
+      { id: 'd', name: 'Ingeklokt', active: true, trade: 'overig' },
+    ],
+    entries: [], clock: { c: '2026-11-13T08:00', d: '2026-11-13T09:00' },
+  };
+  const sp = L.scenePeople(d);
+  assert.deepStrictEqual(sp.map((p) => p.id), ['a', 'c', 'd'], 'inactive hidden unless still clocked in, order kept');
+  assert.deepStrictEqual(sp.map((p) => p.clockedIn), [false, true, true]);
+  assert.strictEqual(sp[0].trade, 'schilder');
+  assert.strictEqual(sp[0].name, 'Actief');
+  assert.deepStrictEqual(L.scenePeople({ employees: [], entries: [], clock: {} }), []);
+}
+
 console.log('Alle tests zijn goed.');

@@ -204,6 +204,14 @@
     return d;
   }
 
+  // Wie de scene laat zien: actieve mensen, en wie nog ingeklokt is ook al is hij niet meer actief.
+  function scenePeople(data) {
+    var clock = data.clock || {};
+    return data.employees.filter(function (e) { return e.active || clock[e.id]; }).map(function (e) {
+      return { id: e.id, name: e.name, trade: e.trade || 'overig', clockedIn: !!clock[e.id] };
+    });
+  }
+
   // "YYYY-MM-DDTHH:MM" in local time
   function nowStamp(d) {
     d = d || new Date();
@@ -259,7 +267,7 @@
     hoursFromTimes: hoursFromTimes, entryHours: entryHours, fmtHours: fmtHours, parseHours: parseHours,
     sumHours: sumHours, entriesFor: entriesFor, weekTable: weekTable,
     csvFor: csvFor, monthRange: monthRange, uid: uid,
-    TRADES: TRADES, tradeLabel: tradeLabel, upgradeData: upgradeData, nowStamp: nowStamp, stampMinutes: stampMinutes,
+    scenePeople: scenePeople, TRADES: TRADES, tradeLabel: tradeLabel, upgradeData: upgradeData, nowStamp: nowStamp, stampMinutes: stampMinutes,
     clockIn: clockIn, clockOutPlan: clockOutPlan, clockOutCommit: clockOutCommit, clockCancel: clockCancel
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

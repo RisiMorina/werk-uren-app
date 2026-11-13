@@ -82,7 +82,9 @@
         d.removeEventListener('keydown', onKey);
         if (d.open) d.close();
         var pick = d.querySelector('.chip[data-trade][aria-pressed="true"]');
-        resolve({ value: val, text: text, trade: pick ? pick.getAttribute('data-trade') : null });
+        var fields = {};
+        d.querySelectorAll('[data-field]').forEach(function (el) { fields[el.getAttribute('data-field')] = el.value; });
+        resolve({ value: val, text: text, trade: pick ? pick.getAttribute('data-trade') : null, fields: fields });
       }
       function onClick(e) { var b = e.target.closest('[data-val]'); if (b) done(b.getAttribute('data-val')); }
       // Alleen voor de Esc-toets. Het 'close'-signaal van een vorige dialog komt soms laat aan,
@@ -144,9 +146,10 @@
   }
 
   // ---------- tabs ----------
-  var TITELS = { invullen: 'Uren invullen', week: 'Weekoverzicht', mensen: 'Mensen en bestanden' };
+  var TITELS = { werkvloer: 'Werkvloer', invullen: 'Uren invullen', week: 'Weekoverzicht', mensen: 'Mensen en bestanden' };
   function go(tab) {
     st.tab = tab;
+    if (tab !== 'werkvloer') Scene.stop();
     document.querySelectorAll('.tab').forEach(function (b) {
       if (b.dataset.tab === tab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     });
@@ -157,7 +160,8 @@
   }
   function render() {
     renderBanner();
-    if (st.tab === 'invullen') renderInvullen();
+    if (st.tab === 'werkvloer') renderWerkvloer();
+    else if (st.tab === 'invullen') renderInvullen();
     else if (st.tab === 'week') renderWeek();
     else renderMensen();
   }
@@ -175,6 +179,132 @@
     b.hidden = false;
     b.innerHTML = '<span>' + (data.lastBackup ? 'De laatste back-up is al meer dan 14 dagen oud.' : 'Je hebt nog geen back-up gemaakt.') +
       '</span><button class="knop" data-action="backup">Back-up maken</button>';
+  }
+
+  // ---------- scherm: werkvloer ----------
+  var sceneCanvas = document.createElement('canvas');
+  sceneCanvas.className = 'scene';
+  sceneCanvas.setAttribute('role', 'img');
+  sceneCanvas.setAttribute('aria-label', 'De werkvloer met poppetjes. Onder het plaatje staat dezelfde lijst met knoppen.');
+  Scene.mount(sceneCanvas, function (id) { openPersonSheet(id); });
+
+  function sinceText(stamp) {
+    var d = stamp.slice(0, 10), today = L.todayISO();
+    var day = d === today ? 'vandaag' : d === L.addDays(today, -1) ? 'gisteren' : L.langeDatum(d);
+    return day + ' ' + stamp.slice(11, 16);
+  }
+
+  function renderWerkvloer() {
+    var people = L.scenePeople(data);
+    if (!data.employees.length) {
+      Scene.stop();
+      $('#scherm').innerHTML = '<div class="blok leeg"><p>Er zijn nog geen medewerkers.</p>' +
+        '<button class="knop primair groot" data-action="eerste-mens">Voeg je eerste medewerker toe</button></div>';
+      return;
+    }
+    if (!people.length) {
+      Scene.stop();
+      $('#scherm').innerHTML = '<div class="blok leeg"><p>Er zijn geen actieve medewerkers.</p>' +
+        '<button class="knop primair groot" data-action="naar-mensen">Naar Mensen</button></div>';
+      return;
+    }
+    var working = people.filter(function (p) { return p.clockedIn; }).length;
+    var html = '<div class="vloerlabel">Op de werkvloer: <b>' + working + ' van ' + people.length + '</b></div><div id="scene-slot" class="scene-slot"></div>' +
+      '<section class="blok"><h2>Lijst</h2>' + people.map(function (p) {
+        var stamp = data.clock[p.id];
+        return '<div class="mens"><button class="mens-naam" data-action="persoon" data-id="' + esc(p.id) + '">' + esc(p.name) +
+          '<small>' + esc(L.tradeLabel(p.trade)) + ' · ' + (stamp ? 'ingeklokt sinds ' + esc(sinceText(stamp)) : 'niet ingeklokt') + '</small></button>' +
+          '<button class="knop' + (stamp ? '' : ' primair') + '" data-action="persoon" data-id="' + esc(p.id) + '">' + (stamp ? 'Uitklokken' : 'Inklokken') + '</button></div>';
+      }).join('') + '</section>';
+    $('#scherm').innerHTML = html;
+    $('#scene-slot').appendChild(sceneCanvas);
+    Scene.setPeople(people);
+    Scene.start();
+  }
+
+  var sheetEmp = null;
+  function updateSheet() {
+    var tot = $('#s-total');
+    if (!tot) return;
+    var s = $('#s-start').value, e = $('#s-end').value;
+    var warn = $('#s-warn');
+    if (!s || !e) { tot.textContent = 'Vul de tijden in'; warn.hidden = true; return; }
+    var tmp = { clock: {}, entries: [] };
+    tmp.clock[sheetEmp] = s.slice(0, 16);
+    var pl = L.clockOutPlan(tmp, sheetEmp, e.slice(0, 16), $('#s-pause').value);
+    if (pl.blocked) { tot.textContent = 'Controleer de eindtijd'; warn.hidden = true; return; }
+    tot.textContent = L.fmtHours(pl.hours) + ' uur';
+    warn.hidden = !pl.tooLong;
+  }
+
+  function openPersonSheet(empId, preset) {
+    var emp = data.employees.filter(function (x) { return x.id === empId; })[0];
+    if (!emp) return;
+    sheetEmp = empId;
+    preset = preset || {};
+    var stamp = data.clock[empId];
+    var head = '<p class="uitleg" style="margin-bottom:12px">' + esc(L.tradeLabel(emp.trade)) + '</p>';
+
+    if (!stamp) {
+      dialog(emp.name, head + '<div class="veld"><label for="s-in">Ingeklokt om</label>' +
+        '<input type="datetime-local" id="s-in" data-field="start" value="' + esc(preset.start || L.nowStamp()) + '"></div>' +
+        '<p class="uitleg" style="margin:10px 0 0">Staat de tijd goed, tik dan op Inklokken. Was iemand al eerder begonnen, pas dan de tijd aan.</p>', [
+        { label: 'Inklokken', value: 'in', cls: 'primair' },
+        { label: 'Sluiten', value: 'close' }
+      ]).then(function (r) {
+        if (r.value !== 'in') return;
+        var s = (r.fields.start || '').slice(0, 16);
+        if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s)) s = L.nowStamp();
+        if (L.clockIn(data, empId, s)) { save(); toast(emp.name + ' ingeklokt'); }
+        render();
+      });
+      return;
+    }
+
+    var pause = preset.pause !== undefined ? preset.pause : data.prefs.breakMin;
+    dialog(emp.name, head + '<p style="margin-bottom:12px"><b>Ingeklokt sinds ' + esc(sinceText(stamp)) + '</b></p>' +
+      '<div class="velden"><div class="veld vol"><label for="s-start">Begonnen om</label><input type="datetime-local" id="s-start" data-field="start" value="' + esc(preset.start || stamp) + '"></div>' +
+      '<div class="veld vol"><label for="s-end">Gestopt om</label><input type="datetime-local" id="s-end" data-field="end" value="' + esc(preset.end || L.nowStamp()) + '"></div>' +
+      '<div class="veld vol"><label for="s-pause">Pauze in minuten</label><input type="number" id="s-pause" data-field="pause" inputmode="numeric" min="0" max="600" step="5" value="' + esc(pause) + '"></div></div>' +
+      '<div class="totaal"><span>Totaal</span><strong id="s-total"></strong></div>' +
+      '<p class="waarschuwing" id="s-warn" hidden>Dit is meer dan 16 uur. Controleer de eindtijd.</p>', [
+      { label: 'Uitklokken en opslaan', value: 'out', cls: 'primair' },
+      { label: 'Annuleren inklokken', value: 'cancel', cls: 'gevaar' },
+      { label: 'Sluiten', value: 'close' }
+    ]).then(function (r) {
+      if (r.value !== 'out' && r.value !== 'cancel') return;
+      var F = r.fields;
+      var again = function () { openPersonSheet(empId, { start: F.start, end: F.end, pause: F.pause }); };
+      var wipe = function () { L.clockCancel(data, empId); save(); toast('Inklokken gewist'); render(); };
+      if (r.value === 'cancel') {
+        confirmBox('Inklokken wissen?', emp.name + ' is dan niet meer ingeklokt. Er worden geen uren opgeslagen.', 'Ja, wissen', true).then(function (ok) { if (ok) wipe(); else again(); });
+        return;
+      }
+      var startS = (F.start || stamp).slice(0, 16), endS = (F.end || '').slice(0, 16);
+      if (!endS) { toast('Vul de eindtijd in.', 'fout'); again(); return; }
+      var tmp = { clock: {}, entries: [] };
+      tmp.clock[empId] = startS;
+      var pl = L.clockOutPlan(tmp, empId, endS, F.pause);
+      if (pl.blocked) { toast('Controleer de eindtijd: na het begin en binnen 24 uur.', 'fout'); again(); return; }
+      var commit = function () {
+        data.clock[empId] = startS;
+        L.clockOutCommit(data, empId, pl.entry);
+        data.prefs.breakMin = Number(F.pause) || 0;
+        save();
+        toast('Opgeslagen: ' + emp.name + ', ' + L.fmtHours(pl.hours) + ' uur');
+        render();
+      };
+      if (pl.hours <= 0) {
+        confirmBox('Dit is 0 uur', 'Er wordt niets opgeslagen en ' + emp.name + ' is niet meer ingeklokt. Doorgaan?', 'Ja, wissen', true).then(function (ok) { if (ok) wipe(); else again(); });
+        return;
+      }
+      if (pl.tooLong) {
+        confirmBox('Meer dan 16 uur', emp.name + ' staat op ' + L.fmtHours(pl.hours) + ' uur. Klopt de eindtijd?', 'Ja, dit klopt', false).then(function (ok) { if (ok) commit(); else again(); });
+        return;
+      }
+      commit();
+    });
+    updateSheet();
   }
 
   // ---------- scherm: invullen ----------
@@ -520,6 +650,7 @@
       case 'eerste-mens':
       case 'nieuw-mens': addEmployee(); break;
       case 'naar-mensen': go('mensen'); break;
+      case 'persoon': openPersonSheet(el.dataset.id); break;
       case 'hernoem': renameEmployee(el.dataset.id); break;
       case 'beroep':
         el.parentNode.querySelectorAll('.chip').forEach(function (c) { c.setAttribute('aria-pressed', String(c === el)); });
@@ -542,6 +673,7 @@
     else if (id === 'f-break') { f.breakMin = ev.target.value; updatePreview(); document.querySelectorAll('[data-action="pauze"]').forEach(function (b) { b.setAttribute('aria-pressed', String(Number(f.breakMin) === Number(b.dataset.min))); }); }
     else if (id === 'f-hours') { f.hours = ev.target.value; updatePreview(); document.querySelectorAll('[data-action="uren"]').forEach(function (b) { b.setAttribute('aria-pressed', String(f.hours === b.dataset.h)); }); }
     else if (id === 'f-note') { f.note = ev.target.value; }
+    else if (id === 's-start' || id === 's-end' || id === 's-pause') { updateSheet(); }
   });
   document.addEventListener('change', function (ev) {
     var id = ev.target.id;
@@ -558,7 +690,7 @@
       if (dup) { toast(name + ' staat er al.', 'fout'); return; }
       data.employees.push({ id: L.uid(), name: name, active: true, trade: p.trade });
       save(); toast(name + ' toegevoegd');
-      if (data.employees.length === 1 || st.tab === 'invullen' || st.tab === 'week') { go(data.employees.length === 1 ? 'invullen' : st.tab); } else render();
+      if (data.employees.length === 1) go('werkvloer'); else render();
     });
   }
   function renameEmployee(id) {
@@ -584,5 +716,5 @@
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () { /* offline-werking is een extraatje */ }); });
   }
-  go('invullen');
+  go('werkvloer');
 })();
