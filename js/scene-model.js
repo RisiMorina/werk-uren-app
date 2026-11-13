@@ -3,11 +3,11 @@
 (function (root) {
   'use strict';
 
-  var TILE_W = 64, TILE_H = 32;
+  var TILE_W = 64, TILE_H = 44;
 
   var WORLD = {
     building: { x0: 0, y0: 0, x1: 8, y1: 6 },   // het half afgebouwde gebouw
-    bench: { x0: 9.2, y0: 0.4, x1: 11.1, y1: 5.6 } // twee bankjes naast de rechtermuur
+    bench: { x0: 9.2, y0: 0.4, x1: 11.1, y1: 7.6 } // twee bankjes naast de rechtermuur
   };
   // Opening in de rechtermuur: buiten en binnen
   var DOOR_OUT = { x: 8.8, y: 3.0 };
@@ -43,7 +43,7 @@
 
   function benchSeat(i) {
     var k = ((i % 16) + 16) % 16;
-    return { x: k < 8 ? 9.55 : 10.75, y: 0.8 + (k % 8) * 0.65 };
+    return { x: k < 8 ? 9.55 : 10.75, y: 0.8 + (k % 8) * 0.9 };
   }
 
   // Zitplaats naar volgorde, werkplek naar volgorde binnen het beroep.

@@ -13,7 +13,8 @@ const inside = (p) => p.x >= 0.3 && p.x <= 7.7 && p.y >= 0.3 && p.y <= 5.7;
 // isometric projection
 assert.deepStrictEqual(M.iso(0, 0, 0), { sx: 0, sy: 0 });
 assert.strictEqual(M.iso(1, 0, 0).sx, 32);
-assert.strictEqual(M.iso(1, 0, 0).sy, 16);
+assert.strictEqual(M.iso(1, 0, 0).sy, 22, 'steep camera: tile is 64 wide and 44 high');
+assert.ok(M.benchSeat(1).y - M.benchSeat(0).y >= 0.9, 'room for names on the bench');
 assert.strictEqual(M.iso(0, 1, 0).sx, -32);
 assert.strictEqual(M.iso(0, 0, 10).sy, -10, 'z lifts up');
 
