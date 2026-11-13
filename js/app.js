@@ -214,7 +214,7 @@
         var stamp = data.clock[p.id];
         return '<div class="mens"><button class="mens-naam" data-action="persoon" data-id="' + esc(p.id) + '">' + esc(p.name) +
           '<small>' + esc(L.tradeLabel(p.trade)) + ' · ' + (stamp ? 'ingeklokt sinds ' + esc(sinceText(stamp)) : 'niet ingeklokt') + '</small></button>' +
-          '<button class="knop' + (stamp ? '' : ' primair') + '" data-action="persoon" data-id="' + esc(p.id) + '">' + (stamp ? 'Uitklokken' : 'Inklokken') + '</button></div>';
+          '<button class="knop' + (stamp ? '' : ' primair') + '" data-action="persoon" data-id="' + esc(p.id) + '" aria-label="' + esc(p.name) + (stamp ? ' uitklokken' : ' inklokken') + '">' + (stamp ? 'Uitklokken' : 'Inklokken') + '</button></div>';
       }).join('') + '</section>';
     $('#scherm').innerHTML = html;
     $('#scene-slot').appendChild(sceneCanvas);
@@ -289,7 +289,7 @@
       var commit = function () {
         data.clock[empId] = startS;
         L.clockOutCommit(data, empId, pl.entry);
-        data.prefs.breakMin = Number(F.pause) || 0;
+        data.prefs.breakMin = L.cleanBreak(F.pause);
         save();
         toast('Opgeslagen: ' + emp.name + ', ' + L.fmtHours(pl.hours) + ' uur');
         render();
@@ -393,7 +393,7 @@
     var entry = { id: f.editingId || L.uid(), empId: f.empId, date: f.date, mode: f.mode, note: (f.note || '').trim() };
     if (f.mode === 'times') {
       if (!f.start || !f.end) { toast('Vul begin en eind in.', 'fout'); return; }
-      entry.start = f.start; entry.end = f.end; entry.breakMin = Number(f.breakMin) || 0;
+      entry.start = f.start; entry.end = f.end; entry.breakMin = L.cleanBreak(f.breakMin);
     } else {
       var h = L.parseHours(f.hours);
       if (h === null) { toast('Vul het aantal uren in, bijvoorbeeld 7,5.', 'fout'); return; }
@@ -408,7 +408,7 @@
       } else {
         data.entries.push(entry);
       }
-      if (f.mode === 'times') data.prefs = { start: f.start, end: f.end, breakMin: Number(f.breakMin) || 0 };
+      if (f.mode === 'times') data.prefs = { start: f.start, end: f.end, breakMin: L.cleanBreak(f.breakMin) };
       save();
       toast('Opgeslagen: ' + empName(entry.empId) + ', ' + L.fmtHours(hrs) + ' uur');
       var wasEdit = !!f.editingId;

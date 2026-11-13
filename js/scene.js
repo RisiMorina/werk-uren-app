@@ -135,7 +135,7 @@
     var x = f.x, y = f.y, moving = f.moving;
     if (!reduced && f.state === 'working' && f.trade === 'overig') {
       var s = Math.sin(t * 0.7 + f.ph);
-      x += (s + 1) / 2 * 1.3;
+      x += s * 0.35;
       moving = Math.abs(Math.cos(t * 0.7 + f.ph)) > 0.12;
     }
     return { x: x, y: y, moving: moving };
@@ -197,25 +197,64 @@
   }
 
   // ---------- namen ----------
-  function drawName(f, name, t, idx) {
-    var v = visual(f, t);
-    var p = iso(v.x, v.y, (f.state === 'bench' ? BENCH_H : 0) + 44 * FS);
-    var sx = ox + p.sx * scale, sy = oy + p.sy * scale - 6;
-    if (f.state === 'bench' && idx % 2) sy -= 14; // om en om hoger, zodat namen niet over elkaar vallen
-    ctx.font = '700 12px system-ui, -apple-system, "Segoe UI", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    var w = ctx.measureText(name).width + 10;
-    ctx.fillStyle = f.state === 'bench' ? 'rgba(255,255,255,.92)' : '#F2B705';
-    var x0 = sx - w / 2, y0 = sy - 9, r = 6;
+  function pill(x0, y0, w, h, fill) {
+    var r = 6;
+    ctx.fillStyle = fill;
     ctx.beginPath();
     ctx.moveTo(x0 + r, y0); ctx.lineTo(x0 + w - r, y0); ctx.quadraticCurveTo(x0 + w, y0, x0 + w, y0 + r);
-    ctx.lineTo(x0 + w, y0 + 18 - r); ctx.quadraticCurveTo(x0 + w, y0 + 18, x0 + w - r, y0 + 18);
-    ctx.lineTo(x0 + r, y0 + 18); ctx.quadraticCurveTo(x0, y0 + 18, x0, y0 + 18 - r);
+    ctx.lineTo(x0 + w, y0 + h - r); ctx.quadraticCurveTo(x0 + w, y0 + h, x0 + w - r, y0 + h);
+    ctx.lineTo(x0 + r, y0 + h); ctx.quadraticCurveTo(x0, y0 + h, x0, y0 + h - r);
     ctx.lineTo(x0, y0 + r); ctx.quadraticCurveTo(x0, y0, x0 + r, y0);
     ctx.closePath(); ctx.fill();
+  }
+  var FONT = '700 12px system-ui, -apple-system, "Segoe UI", sans-serif';
+  var NUDGE = [0, -19, -38, -57]; // botst een naam, dan schuift hij omhoog
+
+  // Naam boven elk poppetje dat niet op de bank zit. Voorste poppetjes eerst, achterste schuiven op.
+  function drawNames(t) {
+    var taken = [];
+    ctx.font = FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    var shown = list.filter(function (e) { return figs[e.id].state !== 'bench'; }).map(function (e) {
+      var v = visual(figs[e.id], t);
+      return { e: e, v: v, depth: v.x + v.y };
+    }).sort(function (a, b) { return b.depth - a.depth; });
+    shown.forEach(function (it) {
+      var p = iso(it.v.x, it.v.y, 44 * FS);
+      var sx = ox + p.sx * scale, sy = oy + p.sy * scale - 6;
+      var w = ctx.measureText(it.e.name).width + 10, rect = null;
+      for (var k = 0; k < NUDGE.length; k++) {
+        rect = { x0: sx - w / 2, y0: sy + NUDGE[k] - 9, x1: sx + w / 2, y1: sy + NUDGE[k] + 9, cy: sy + NUDGE[k] };
+        var clash = taken.some(function (r) { return rect.x0 < r.x1 && rect.x1 > r.x0 && rect.y0 < r.y1 && rect.y1 > r.y0; });
+        if (!clash) break;
+      }
+      taken.push(rect);
+      pill(rect.x0, rect.y0, w, 18, '#F2B705');
+      ctx.fillStyle = '#12202B';
+      ctx.fillText(it.e.name, sx, rect.cy);
+    });
+  }
+
+  // Wie er op de bank zit staat in een label links onder, zodat namen op de bank niet over elkaar vallen.
+  function drawBenchSummary() {
+    var names = list.filter(function (e) { return figs[e.id].state === 'bench'; }).map(function (e) { return e.name; });
+    if (!names.length) return;
+    ctx.font = FONT; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    var maxW = Math.min(cssW * 0.5, 230);
+    var tokens = ['Op', 'de', 'bank:'].concat(names.map(function (n, i) { return n + (i < names.length - 1 ? ',' : ''); }));
+    var lines = [], line = '';
+    tokens.forEach(function (tk) {
+      var tryLine = line ? line + ' ' + tk : tk;
+      if (line && ctx.measureText(tryLine).width > maxW - 14) { lines.push(line); line = tk; } else line = tryLine;
+    });
+    lines.push(line);
+    if (lines.length > 3) { lines = lines.slice(0, 3); lines[2] = lines[2].replace(/,?$/, '') + ' ...'; }
+    var w = 0;
+    lines.forEach(function (l) { w = Math.max(w, ctx.measureText(l).width); });
+    w += 14;
+    var h = lines.length * 16 + 8, x0 = 8, y0 = cssH - 8 - h;
+    pill(x0, y0, w, h, 'rgba(255,255,255,.94)');
     ctx.fillStyle = '#12202B';
-    ctx.fillText(name, sx, sy);
+    lines.forEach(function (l, i) { ctx.fillText(l, x0 + 7, y0 + 4 + 8 + i * 16); });
   }
 
   // ---------- een beeld tekenen ----------
@@ -240,13 +279,8 @@
     for (var i = 0; i < items.length; i++) items[i].draw();
     ctx.restore();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    var onBench = list.filter(function (e) { return figs[e.id].state === 'bench'; }).length;
-    list.forEach(function (e, idx) {
-      var f = figs[e.id];
-      // een volle bank: alleen de beginletter, de hele naam staat in de lijst en in het scherm bij tikken
-      var label = f.state === 'bench' && onBench > 6 ? e.name.charAt(0).toUpperCase() : e.name;
-      drawName(f, label, t, idx);
-    });
+    drawNames(t);
+    drawBenchSummary();
   }
 
   function step(dt) {

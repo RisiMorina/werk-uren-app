@@ -234,7 +234,7 @@ input:focus { border-color: var(--blauw); outline: none; }
 .mens .mens-naam { flex: 1; text-align: left; border: 0; background: none; font-weight: 700; font-size: 1.15rem; padding: 10px 0; cursor: pointer; }
 .mens .mens-naam small { display: block; font-weight: 500; color: var(--zacht); font-size: .85rem; }
 .mens.inactief .mens-naam { color: var(--zacht); }
-.mens .knop { min-height: 46px; padding: 6px 14px; }
+.mens .knop { min-height: 48px; padding: 6px 14px; }
 .uitleg { color: var(--zacht); font-size: .95rem; margin-bottom: 12px; }
 .stappen { margin: 0 0 10px; padding-left: 22px; }
 .stappen li { margin-bottom: 6px; }

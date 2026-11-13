@@ -20,40 +20,48 @@
   var TRADE_IDS = ['elektricien', 'vloerlegger', 'schilder', 'loodgieter', 'timmerman', 'overig'];
   function normTrade(t) { return TRADE_IDS.indexOf(t) >= 0 ? t : 'overig'; }
 
-  // Eerste plek per beroep (x, y), richting waarin de volgende mensen staan (along),
-  // en de rij daarachter (across). Alles ligt binnen het gebouw.
-  var SPOTS = {
-    elektricien: { x: 1.5, y: 0.8, ax: 1, ay: 0, bx: 0, by: 0.9 },    // bij de meterkast aan de achtermuur
-    schilder:    { x: 0.8, y: 2.2, ax: 0, ay: 1, bx: 0.9, by: 0 },    // bij de witte muur links
-    vloerlegger: { x: 4.5, y: 2.5, ax: 1, ay: 0, bx: 0, by: 0.9 },    // op de halve vloer
-    loodgieter:  { x: 2.0, y: 5.0, ax: 1, ay: 0, bx: 0, by: -0.9 },   // bij de leidingen voor
-    timmerman:   { x: 6.5, y: 0.9, ax: 0, ay: 1, bx: -0.9, by: 0 },   // bij het houten frame
-    overig:      { x: 2.2, y: 3.4, ax: 0, ay: 0.7, bx: 1, by: 0 }     // bij de stapel planken
+  // 16 werkplekken in het gebouw, minstens 1,2 tegel uit elkaar en niet in of op een voorwerp.
+  // Iedereen pakt de vrije plek die het dichtst bij zijn eigen hoek van het gebouw ligt,
+  // dus elke mix van beroepen past zonder dat poppetjes door elkaar lopen.
+  var SPOT_POOL = [
+    { x: 1.3, y: 0.9 }, { x: 2.7, y: 0.9 }, { x: 5.3, y: 0.9 }, { x: 6.85, y: 1.4 },
+    { x: 0.95, y: 2.3 }, { x: 2.6, y: 2.3 }, { x: 5.0, y: 2.3 },
+    { x: 3.0, y: 3.6 }, { x: 4.4, y: 3.6 }, { x: 5.8, y: 3.6 }, { x: 7.2, y: 3.6 },
+    { x: 3.2, y: 4.8 }, { x: 4.7, y: 4.8 }, { x: 6.0, y: 4.8 }, { x: 7.3, y: 4.8 },
+    { x: 0.95, y: 4.9 }
+  ];
+  // Eigen hoek per beroep: meterkast, halve vloer, witte muur, leidingen, houten frame, plankenstapel
+  var HOME = {
+    elektricien: { x: 2.7, y: 0.9 }, vloerlegger: { x: 5.0, y: 2.3 }, schilder: { x: 0.95, y: 2.3 },
+    loodgieter: { x: 4.7, y: 4.8 }, timmerman: { x: 6.85, y: 1.4 }, overig: { x: 3.0, y: 3.6 }
   };
-
-  function workSpot(trade, index) {
-    var s = SPOTS[normTrade(trade)];
-    var i = ((index % 16) + 16) % 16;
-    var along = i % 4, row = Math.floor(i / 4);
-    return {
-      x: s.x + s.ax * along + s.bx * row,
-      y: s.y + s.ay * along + s.by * row
-    };
-  }
+  // De voorwerpen uit scene.js (met 0,3 tegel marge), zodat een test kan nagaan dat niemand erin staat.
+  var OBSTACLES = [
+    { x0: 3.9, y0: 0.25, x1: 4.9, y1: 1.25 },    // kabelhaspel
+    { x0: 5.9, y0: 0.3, x1: 6.65, y1: 1.05 }, { x0: 7.2, y0: 0.3, x1: 7.95, y1: 1.05 },   // palen van het frame
+    { x0: 5.9, y0: 1.8, x1: 6.65, y1: 2.55 }, { x0: 7.2, y0: 1.8, x1: 7.95, y1: 2.55 },
+    { x0: 1.2, y0: 5.1, x1: 7.8, y1: 5.84 },     // leidingen
+    { x0: 0.8, y0: 3.6, x1: 2.2, y1: 4.45 },     // planken
+    { x0: 3.4, y0: 1.8, x1: 4.35, y1: 2.75 },    // tegels
+    { x0: 1.05, y0: 1.7, x1: 1.87, y1: 2.52 }    // verfemmer
+  ];
 
   function benchSeat(i) {
     var k = ((i % 16) + 16) % 16;
     return { x: k < 8 ? 9.55 : 10.75, y: 0.8 + (k % 8) * 0.9 };
   }
 
-  // Zitplaats naar volgorde, werkplek naar volgorde binnen het beroep.
+  // Zitplaats naar volgorde, werkplek naar de dichtstbijzijnde vrije plek bij het eigen beroep.
   function layout(people) {
-    var out = {}, counts = {};
+    var out = {}, free = SPOT_POOL.slice();
     people.forEach(function (p, i) {
-      var t = normTrade(p.trade);
-      var n = counts[t] || 0;
-      counts[t] = n + 1;
-      out[p.id] = { seat: benchSeat(i), spot: workSpot(t, n) };
+      if (!free.length) free = SPOT_POOL.slice(); // meer dan 16 mensen: plekken worden gedeeld
+      var home = HOME[normTrade(p.trade)], best = 0, bestD = Infinity;
+      free.forEach(function (s, k) {
+        var d = Math.hypot(s.x - home.x, s.y - home.y);
+        if (d < bestD - 1e-9) { bestD = d; best = k; }
+      });
+      out[p.id] = { seat: benchSeat(i), spot: free.splice(best, 1)[0] };
     });
     return out;
   }
@@ -122,7 +130,7 @@
 
   var api = {
     TILE_W: TILE_W, TILE_H: TILE_H, WORLD: WORLD, DOOR_OUT: DOOR_OUT, DOOR_IN: DOOR_IN,
-    iso: iso, workSpot: workSpot, benchSeat: benchSeat, layout: layout, helmColor: helmColor,
+    iso: iso, SPOT_POOL: SPOT_POOL, HOME: HOME, OBSTACLES: OBSTACLES, benchSeat: benchSeat, layout: layout, helmColor: helmColor,
     makeFigure: makeFigure, setClocked: setClocked, update: update
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

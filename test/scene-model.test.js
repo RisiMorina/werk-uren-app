@@ -23,31 +23,48 @@ const seats = Array.from({ length: 16 }, (_, i) => M.benchSeat(i));
 assert.ok(minDistance(seats) >= 0.6, 'bench seats keep distance');
 assert.ok(seats.every((s) => s.x > M.WORLD.building.x1), 'bench is outside the building');
 
-// work spots
-const same = Array.from({ length: 16 }, (_, i) => M.workSpot('elektricien', i));
-assert.ok(same.every(inside), 'sixteen of one trade all stay inside the building');
-assert.ok(minDistance(same) >= 0.6, 'sixteen of one trade do not overlap');
-for (const t of ['elektricien', 'vloerlegger', 'schilder', 'loodgieter', 'timmerman', 'overig']) {
-  const all = Array.from({ length: 16 }, (_, i) => M.workSpot(t, i));
-  assert.ok(all.every(inside), t + ' stays inside');
-  assert.ok(minDistance(all) >= 0.6, t + ' does not overlap');
-}
-const firsts = ['elektricien', 'vloerlegger', 'schilder', 'loodgieter', 'timmerman', 'overig'].map((t) => M.workSpot(t, 0));
-assert.ok(minDistance(firsts) >= 1.0, 'each trade has its own place');
-assert.deepStrictEqual(M.workSpot('onbekend', 0), M.workSpot('overig', 0), 'unknown trade works like overig');
+// work spots: one shared pool of 16, so no mix of trades can ever collide
+const TRADES = ['elektricien', 'vloerlegger', 'schilder', 'loodgieter', 'timmerman', 'overig'];
+assert.strictEqual(M.SPOT_POOL.length, 16);
+assert.ok(M.SPOT_POOL.every(inside), 'every spot is inside the building');
+assert.ok(minDistance(M.SPOT_POOL) >= 1.2, 'spots are at least 1.2 tiles apart');
+const near = (p, r) => p.x > r.x0 && p.x < r.x1 && p.y > r.y0 && p.y < r.y1;
+assert.ok(M.SPOT_POOL.every((p) => !M.OBSTACLES.some((r) => near(p, r))), 'no spot stands inside a prop or on the pipes');
 
-// layout: seat by order, spot by order within the trade
+// layout: seat by order, spot by affinity with the trade, all distinct
 const people = [
   { id: 'a', trade: 'elektricien' }, { id: 'b', trade: 'schilder' }, { id: 'c', trade: 'elektricien' },
 ];
 const lay = M.layout(people);
 assert.deepStrictEqual(lay.a.seat, M.benchSeat(0));
 assert.deepStrictEqual(lay.c.seat, M.benchSeat(2));
-assert.deepStrictEqual(lay.a.spot, M.workSpot('elektricien', 0));
-assert.deepStrictEqual(lay.c.spot, M.workSpot('elektricien', 1));
-assert.deepStrictEqual(lay.b.spot, M.workSpot('schilder', 0));
+assert.ok(dist(lay.a.spot, M.HOME.elektricien) < 1.0, 'first electrician stands at the meter box');
+assert.ok(dist(lay.b.spot, M.HOME.schilder) < 1.0, 'painter stands at the white wall');
+assert.notDeepStrictEqual(lay.a.spot, lay.c.spot, 'two electricians do not share a spot');
 assert.deepStrictEqual(M.layout(people), lay, 'layout is stable');
 assert.deepStrictEqual(M.layout([]), {});
+
+// six people, one per trade: each near its own place
+const six = TRADES.map((t, i) => ({ id: 's' + i, trade: t }));
+const l6 = M.layout(six);
+assert.ok(six.every((p) => dist(l6[p.id].spot, M.HOME[p.trade]) < 1.6), 'each trade is near its home');
+assert.ok(minDistance(six.map((p) => l6[p.id].spot)) >= 1.2);
+
+// sixteen of one trade, and sixteen of mixed trades: all spots distinct and apart
+for (const t of TRADES) {
+  const all = Array.from({ length: 16 }, (_, i) => ({ id: t + i, trade: t }));
+  const l = M.layout(all);
+  assert.ok(minDistance(all.map((p) => l[p.id].spot)) >= 1.2, '16 x ' + t + ' do not overlap');
+}
+const mixed = Array.from({ length: 16 }, (_, i) => ({ id: 'm' + i, trade: TRADES[(i * 5) % 6] }));
+const lm = M.layout(mixed);
+assert.ok(minDistance(mixed.map((p) => lm[p.id].spot)) >= 1.2, 'mixed 16 do not overlap');
+const seven = Array.from({ length: 7 }, (_, i) => ({ id: 'o' + i, trade: 'overig' }));
+const l7 = M.layout(seven);
+assert.ok(minDistance(seven.map((p) => l7[p.id].spot)) >= 1.2, 'five or more Overig keep apart');
+assert.deepStrictEqual(M.layout([{ id: 'u', trade: 'onbekend' }]).u.spot, M.layout([{ id: 'u', trade: 'overig' }]).u.spot, 'unknown trade works like overig');
+const over = Array.from({ length: 20 }, (_, i) => ({ id: 'z' + i, trade: 'overig' }));
+assert.doesNotThrow(() => M.layout(over), 'more than 16 people does not crash');
 
 // walking
 const fig = M.makeFigure(people[0], false, lay.a);

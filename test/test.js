@@ -154,4 +154,18 @@ assert.strictEqual(m.label, 'februari 2026');
   assert.deepStrictEqual(L.scenePeople({ employees: [], entries: [], clock: {} }), []);
 }
 
+// ---- review: een negatieve pauze mag nooit uren erbij geven ----
+{
+  assert.strictEqual(L.cleanBreak(-60), 0);
+  assert.strictEqual(L.cleanBreak('abc'), 0);
+  assert.strictEqual(L.cleanBreak(''), 0);
+  assert.strictEqual(L.cleanBreak(30.4), 30);
+  assert.strictEqual(L.cleanBreak('45'), 45);
+  assert.strictEqual(L.hoursFromTimes('08:00', '16:00', -60), 8, 'negative break counts as no break');
+  const c = { employees: [], entries: [], clock: { j: '2026-11-13T08:00' } };
+  const p = L.clockOutPlan(c, 'j', '2026-11-13T16:00', -60);
+  assert.strictEqual(p.hours, 8);
+  assert.strictEqual(p.entry.breakMin, 0);
+}
+
 console.log('Alle tests zijn goed.');

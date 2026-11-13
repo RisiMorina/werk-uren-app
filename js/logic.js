@@ -65,13 +65,18 @@
     var p = hhmm.split(':');
     return (+p[0]) * 60 + (+p[1]);
   }
+  // A pause is whole minutes and never negative (a typed -60 would add an hour).
+  function cleanBreak(x) {
+    var n = Math.round(Number(x));
+    return n > 0 ? n : 0;
+  }
   // Net hours between start and end minus break. Works over midnight.
   function hoursFromTimes(start, end, breakMin) {
     var a = toMinutes(start), b = toMinutes(end);
     if (a === null || b === null || isNaN(a) || isNaN(b)) return 0;
     var diff = b - a;
     if (diff < 0) diff += 1440;
-    var net = diff - (Number(breakMin) || 0);
+    var net = diff - cleanBreak(breakMin);
     if (net < 0) net = 0;
     return Math.round(net / 60 * 100) / 100;
   }
@@ -237,7 +242,7 @@
     var entry = {
       id: uid(), empId: empId, date: startStamp.slice(0, 10), mode: 'times',
       start: startStamp.slice(11, 16), end: endStamp.slice(11, 16),
-      breakMin: Number(breakMin) || 0, note: ''
+      breakMin: cleanBreak(breakMin), note: ''
     };
     var blocked = diff < 0 || diff >= 1440;
     return {
@@ -267,7 +272,7 @@
     hoursFromTimes: hoursFromTimes, entryHours: entryHours, fmtHours: fmtHours, parseHours: parseHours,
     sumHours: sumHours, entriesFor: entriesFor, weekTable: weekTable,
     csvFor: csvFor, monthRange: monthRange, uid: uid,
-    scenePeople: scenePeople, TRADES: TRADES, tradeLabel: tradeLabel, upgradeData: upgradeData, nowStamp: nowStamp, stampMinutes: stampMinutes,
+    cleanBreak: cleanBreak, scenePeople: scenePeople, TRADES: TRADES, tradeLabel: tradeLabel, upgradeData: upgradeData, nowStamp: nowStamp, stampMinutes: stampMinutes,
     clockIn: clockIn, clockOutPlan: clockOutPlan, clockOutCommit: clockOutCommit, clockCancel: clockCancel
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
