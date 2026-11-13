@@ -1,5 +1,7 @@
-"""Kleine testserver voor lokaal ontwikkelen: python dev-server.py  ->  http://localhost:8123"""
-import http.server, socketserver
+"""Kleine testserver voor lokaal ontwikkelen: python dev-server.py  ->  http://localhost:8123 (draai hem in deze map of daarbuiten)"""
+import http.server, socketserver, os
+
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 class H(http.server.SimpleHTTPRequestHandler):
     extensions_map = {**http.server.SimpleHTTPRequestHandler.extensions_map,

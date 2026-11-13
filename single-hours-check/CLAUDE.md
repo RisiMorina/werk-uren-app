@@ -1,6 +1,6 @@
 # Mijn uren (eigen uren van mijn vader)
 
-Kleine installeerbare app (PWA) in het Nederlands waarmee mijn vader zijn **eigen** werkuren bijhoudt: per dag hoeveel uur hij heeft gewerkt, of dat hij niet heeft gewerkt (vrij, ziek, vakantie, feestdag). Los van de Uren-app voor zijn medewerkers (die staat in de map hierboven). Gewone HTML, CSS en JavaScript, geen framework, geen backend, geen build. Alles is groot (tekst min. 18px, knoppen min. 48px).
+Kleine installeerbare app (PWA) in het Nederlands waarmee mijn vader zijn **eigen** werkuren bijhoudt: per dag hoeveel uur hij heeft gewerkt, of dat hij niet heeft gewerkt (vrij, ziek, vakantie, feestdag). Los van de Uren-app voor zijn medewerkers (die staat in `../werkvloer`). Gewone HTML, CSS en JavaScript, geen framework, geen backend, geen build. Alles is groot (tekst min. 18px, knoppen min. 48px).
 
 Deze map staat op zichzelf: er is niets nodig uit andere mappen, dus hij kan los online gezet worden.
 
@@ -13,6 +13,7 @@ Deze map staat op zichzelf: er is niets nodig uit andere mappen, dus hij kan los
 - `sw.js`: service worker (offline). **Verhoog `VERSIE` bij elke wijziging**, anders blijft de oude versie hangen. Alle bestanden die meegaan staan in `BESTANDEN`.
 - `manifest.webmanifest`, `icons/`: installatie op het beginscherm (naam "Mijn uren", groen met een vinkje).
 - `test/test.js`: `node test/test.js` (vanuit deze map) of `node single-hours-check/test/test.js` (vanuit de hoofdmap).
+- `docs/superpowers/`: ontwerp (`specs/`) en bouwplan (`plans/`) van deze app.
 - `dev-server.py`: lokale testserver op http://localhost:8124 zonder cache. `netlify.toml`: instellingen voor Netlify.
 
 ## Opslag
