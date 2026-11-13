@@ -122,4 +122,17 @@ assert.strictEqual(m.label, 'februari 2026');
   assert.strictEqual(L.nowStamp(new Date(2026, 10, 3, 7, 5)), '2026-11-03T07:05');
 }
 
+// ---- oude data upgraden (back-up zonder clock en trade) ----
+{
+  const old = { employees: [{ id: 'a', name: 'Oud', active: true }, { id: 'b', name: 'Kees', active: true, trade: 'vloerlegger' }], entries: [], clock: { a: '2026-11-13T08:00', weg: '2026-11-13T08:00' } };
+  const up = L.upgradeData(old);
+  assert.strictEqual(up.employees[0].trade, 'overig');
+  assert.strictEqual(up.employees[1].trade, 'vloerlegger');
+  assert.strictEqual(up.clock.a, '2026-11-13T08:00');
+  assert.strictEqual(up.clock.weg, undefined, 'clock of unknown person dropped');
+  const nothing = L.upgradeData({ employees: [{ id: 'a', name: 'X', active: true, trade: 'bestaatniet' }], entries: [] });
+  assert.deepStrictEqual(nothing.clock, {});
+  assert.strictEqual(nothing.employees[0].trade, 'overig', 'unknown trade becomes overig');
+}
+
 console.log('Alle tests zijn goed.');

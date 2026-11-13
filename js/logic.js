@@ -186,6 +186,24 @@
     { id: 'overig', label: 'Overig' }
   ];
 
+  function tradeLabel(id) {
+    for (var i = 0; i < TRADES.length; i++) if (TRADES[i].id === id) return TRADES[i].label;
+    return 'Overig';
+  }
+  // Old data and old back-ups have no trade and no clock: give them defaults.
+  function upgradeData(d) {
+    var ids = {};
+    d.employees.forEach(function (e) {
+      ids[e.id] = true;
+      var known = TRADES.some(function (t) { return t.id === e.trade; });
+      if (!known) e.trade = 'overig';
+    });
+    var clock = {};
+    Object.keys(d.clock || {}).forEach(function (id) { if (ids[id]) clock[id] = d.clock[id]; });
+    d.clock = clock;
+    return d;
+  }
+
   // "YYYY-MM-DDTHH:MM" in local time
   function nowStamp(d) {
     d = d || new Date();
@@ -241,7 +259,7 @@
     hoursFromTimes: hoursFromTimes, entryHours: entryHours, fmtHours: fmtHours, parseHours: parseHours,
     sumHours: sumHours, entriesFor: entriesFor, weekTable: weekTable,
     csvFor: csvFor, monthRange: monthRange, uid: uid,
-    TRADES: TRADES, nowStamp: nowStamp, stampMinutes: stampMinutes,
+    TRADES: TRADES, tradeLabel: tradeLabel, upgradeData: upgradeData, nowStamp: nowStamp, stampMinutes: stampMinutes,
     clockIn: clockIn, clockOutPlan: clockOutPlan, clockOutCommit: clockOutCommit, clockCancel: clockCancel
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

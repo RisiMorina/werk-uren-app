@@ -1,6 +1,6 @@
 /* Offline-werking: eerst uit het geheugen, ondertussen op de achtergrond verversen.
    Verander VERSIE als je bestanden aanpast, dan komt de nieuwe versie bij de volgende keer openen. */
-var VERSIE = 'uren-v6';
+var VERSIE = 'uren-v7';
 var BESTANDEN = [
   './', 'index.html', 'css/app.css', 'js/logic.js', 'js/app.js',
   'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'

@@ -13,14 +13,14 @@
 
   // ---------- opslag ----------
   function emptyData() {
-    return { version: 1, employees: [], entries: [], lastBackup: null, firstUse: L.todayISO(), prefs: { start: '08:00', end: '17:00', breakMin: 30 } };
+    return { version: 1, employees: [], entries: [], clock: {}, lastBackup: null, firstUse: L.todayISO(), prefs: { start: '08:00', end: '17:00', breakMin: 30 } };
   }
   function valid(d) { return d && Array.isArray(d.employees) && Array.isArray(d.entries); }
   function normalize(d) {
     d.firstUse = d.firstUse || L.todayISO();
     d.lastBackup = d.lastBackup || null;
     d.prefs = d.prefs || { start: '08:00', end: '17:00', breakMin: 30 };
-    return d;
+    return L.upgradeData(d);
   }
   function load() {
     try {
@@ -81,7 +81,8 @@
         d.removeEventListener('close', onClose);
         d.removeEventListener('keydown', onKey);
         if (d.open) d.close();
-        resolve({ value: val, text: text });
+        var pick = d.querySelector('.chip[data-trade][aria-pressed="true"]');
+        resolve({ value: val, text: text, trade: pick ? pick.getAttribute('data-trade') : null });
       }
       function onClick(e) { var b = e.target.closest('[data-val]'); if (b) done(b.getAttribute('data-val')); }
       // Alleen voor de Esc-toets. Het 'close'-signaal van een vorige dialog komt soms laat aan,
@@ -102,14 +103,20 @@
       { label: 'Nee, terug', value: 'nee' }
     ]).then(function (r) { return r.value === 'ja'; });
   }
-  function askName(title, value, okLabel) {
-    return dialog(title, '<input type="text" class="dlg-input" maxlength="40" autocomplete="off" value="' + esc(value || '') + '" aria-label="Naam">', [
+  // Naam en beroep in een pop-up. Geeft {name, trade} of null.
+  function askPerson(title, name, trade, okLabel) {
+    var body = '<input type="text" class="dlg-input" maxlength="40" autocomplete="off" value="' + esc(name || '') + '" aria-label="Naam">' +
+      '<p class="uitleg" style="margin:14px 0 0">Beroep</p><div class="chips">' +
+      L.TRADES.map(function (t) {
+        return '<button type="button" class="chip" data-action="beroep" data-trade="' + t.id + '" aria-pressed="' + (t.id === trade) + '">' + esc(t.label) + '</button>';
+      }).join('') + '</div>';
+    return dialog(title, body, [
       { label: okLabel, value: 'ok', cls: 'primair' },
       { label: 'Annuleren', value: 'nee' }
     ]).then(function (r) {
       if (r.value !== 'ok') return null;
-      var t = (r.text || '').trim();
-      return t || null;
+      var n = (r.text || '').trim();
+      return n ? { name: n, trade: r.trade || 'overig' } : null;
     });
   }
 
@@ -414,7 +421,7 @@
     data.employees.forEach(function (e) {
       var n = data.entries.filter(function (x) { return x.empId === e.id; }).length;
       html += '<div class="mens' + (e.active ? '' : ' inactief') + '"><button class="mens-naam" data-action="hernoem" data-id="' + esc(e.id) + '">' + esc(e.name) +
-        '<small>' + (e.active ? 'Tik om de naam te wijzigen' : 'Niet meer actief') + ' · ' + n + ' invoer' + (n === 1 ? '' : 'en') + '</small></button>' +
+        '<small>' + esc(L.tradeLabel(e.trade)) + (e.active ? '' : ' · niet meer actief') + ' · ' + n + ' invoer' + (n === 1 ? '' : 'en') + '</small></button>' +
         '<button class="knop" data-action="actief" data-id="' + esc(e.id) + '">' + (e.active ? 'Stop' : 'Weer actief') + '</button></div>';
     });
     html += '<div style="height:12px"></div><button class="knop primair vol" data-action="nieuw-mens">Medewerker toevoegen</button>' +
@@ -514,6 +521,9 @@
       case 'nieuw-mens': addEmployee(); break;
       case 'naar-mensen': go('mensen'); break;
       case 'hernoem': renameEmployee(el.dataset.id); break;
+      case 'beroep':
+        el.parentNode.querySelectorAll('.chip').forEach(function (c) { c.setAttribute('aria-pressed', String(c === el)); });
+        break;
       case 'actief': toggleActive(el.dataset.id); break;
       case 'installeer':
         if (installEvent) { installEvent.prompt(); installEvent.userChoice.then(function () { installEvent = null; renderMensen(); }); }
@@ -541,11 +551,12 @@
   });
 
   function addEmployee() {
-    askName('Naam van de medewerker', '', 'Toevoegen').then(function (name) {
-      if (!name) return;
+    askPerson('Nieuwe medewerker', '', 'overig', 'Toevoegen').then(function (p) {
+      if (!p) return;
+      var name = p.name;
       var dup = data.employees.some(function (e) { return e.name.toLowerCase() === name.toLowerCase(); });
       if (dup) { toast(name + ' staat er al.', 'fout'); return; }
-      data.employees.push({ id: L.uid(), name: name, active: true });
+      data.employees.push({ id: L.uid(), name: name, active: true, trade: p.trade });
       save(); toast(name + ' toegevoegd');
       if (data.employees.length === 1 || st.tab === 'invullen' || st.tab === 'week') { go(data.employees.length === 1 ? 'invullen' : st.tab); } else render();
     });
@@ -553,14 +564,15 @@
   function renameEmployee(id) {
     var e = data.employees.filter(function (x) { return x.id === id; })[0];
     if (!e) return;
-    askName('Naam wijzigen', e.name, 'Opslaan').then(function (name) {
-      if (!name) return;
-      e.name = name; save(); render();
+    askPerson('Naam en beroep', e.name, e.trade, 'Opslaan').then(function (p) {
+      if (!p) return;
+      e.name = p.name; e.trade = p.trade; save(); render();
     });
   }
   function toggleActive(id) {
     var e = data.employees.filter(function (x) { return x.id === id; })[0];
     if (!e) return;
+    if (e.active && data.clock[e.id]) { toast('Klok eerst uit: ' + e.name + ' is nog ingeklokt.', 'fout'); return; }
     if (e.active) {
       confirmBox(e.name + ' niet meer actief?', 'De naam verdwijnt uit het invulscherm. De oude uren blijven bewaard en je kunt de naam later weer actief maken.', 'Ja, stop', false).then(function (ok) {
         if (ok) { e.active = false; if (st.form.empId === e.id) st.form.empId = null; save(); render(); }
