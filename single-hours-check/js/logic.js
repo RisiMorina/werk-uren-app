@@ -91,10 +91,11 @@
       var h;
       if (rec.mode === 'times') {
         if (!rec.start || !rec.end) return bad('Vul begin en eind in.');
+        if (Number(rec.breakMin) < 0) return bad('De pauze kan niet negatief zijn.');
         h = hoursFromTimes(rec.start, rec.end, rec.breakMin);
       } else {
         if (rec.hours === '' || rec.hours === null || rec.hours === undefined || !isFinite(Number(rec.hours))) return bad('Vul het aantal uren in, bijvoorbeeld 7,5.');
-        h = Number(rec.hours);
+        h = round2(Number(rec.hours));   // net zoals bij het opslaan, anders verdwijnt 0,001 uur stilletjes
       }
       if (h > 24) return bad('Meer dan 24 uur kan niet.');
       if (h <= 0) return bad('Dit komt uit op 0 uur. Controleer de tijden.');
@@ -177,20 +178,39 @@
 
   // ---- data ----
   function isValidData(d) { return !!d && typeof d === 'object' && !!d.days && typeof d.days === 'object' && !Array.isArray(d.days); }
+  var HHMM = /^\d{2}:\d{2}$/;
+  // Maak van een opgeslagen dag een nette dag, of null als er niets van te maken valt. Gooit nooit een fout.
+  function cleanRec(key, r) {
+    try {
+      if (!validDate(key) || !r || typeof r !== 'object' || r.date !== key) return null;
+      var kind = typeof r.kind === 'string' ? r.kind.toLowerCase() : '';
+      var rec = { date: key, kind: kind, note: typeof r.note === 'string' ? r.note : '' };
+      if (kind === 'gewerkt') {
+        if (r.mode === 'times') {
+          if (typeof r.start !== 'string' || typeof r.end !== 'string' || !HHMM.test(r.start) || !HHMM.test(r.end)) return null;
+          rec.mode = 'times'; rec.start = r.start; rec.end = r.end; rec.breakMin = cleanBreak(r.breakMin);
+        } else {
+          var h = typeof r.hours === 'number' ? r.hours : parseHours(r.hours);
+          if (h === null || !isFinite(h)) return null;
+          rec.mode = 'hours'; rec.hours = h;
+        }
+      } else if (!isReason(kind)) return null;
+      return validateRec(rec).ok ? normalizeRec(rec) : null;
+    } catch (e) { return null; }
+  }
   function upgradeData(d) {
-    var days = {};
-    Object.keys(d.days || {}).forEach(function (key) {
-      var r = d.days[key];
-      if (!validDate(key) || !r || r.date !== key) return;
-      if (r.kind !== 'gewerkt' && !isReason(r.kind)) return;
-      if (!validateRec(r).ok) return;
-      days[key] = normalizeRec(r);
+    var days = {}, src = d && d.days && typeof d.days === 'object' && !Array.isArray(d.days) ? d.days : {};
+    Object.keys(src).forEach(function (key) {
+      var rec = cleanRec(key, src[key]);
+      if (rec) days[key] = rec;
     });
+    var p = d.prefs && typeof d.prefs === 'object' ? d.prefs : {};
+    var prefsOk = typeof p.start === 'string' && HHMM.test(p.start) && typeof p.end === 'string' && HHMM.test(p.end) && isFinite(Number(p.breakMin)) && p.breakMin !== null && p.breakMin !== '';
     d.days = days;
-    d.version = d.version || 1;
-    d.lastBackup = d.lastBackup || null;
-    d.firstUse = d.firstUse || todayISO();
-    d.prefs = d.prefs || { start: '08:00', end: '17:00', breakMin: 30 };
+    d.version = 1;
+    d.lastBackup = validDate(d.lastBackup) ? d.lastBackup : null;
+    d.firstUse = validDate(d.firstUse) ? d.firstUse : todayISO();
+    d.prefs = prefsOk ? { start: p.start, end: p.end, breakMin: cleanBreak(p.breakMin) } : { start: '08:00', end: '17:00', breakMin: 30 };
     return d;
   }
 

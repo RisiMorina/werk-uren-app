@@ -41,7 +41,13 @@ const tenMin = L.validateRec(worked({ mode: 'times', start: '08:00', end: '08:10
 assert.strictEqual(tenMin.ok, false);
 assert.strictEqual(tenMin.error, 'Dit komt uit op 0 uur. Controleer de tijden.');
 assert.strictEqual(L.validateRec(worked({ mode: 'times', start: '', end: '16:00', breakMin: 30 })).ok, false, 'times need a start');
-assert.strictEqual(L.validateRec(worked({ mode: 'times', start: '08:00', end: '16:00', breakMin: -60 })).ok, true);
+const negBreak = L.validateRec(worked({ mode: 'times', start: '08:00', end: '16:00', breakMin: -60 }));
+assert.strictEqual(negBreak.ok, false, 'a negative pause is refused, not silently turned into 0');
+assert.strictEqual(negBreak.error, 'De pauze kan niet negatief zijn.');
+assert.strictEqual(L.validateRec(worked({ mode: 'times', start: '08:00', end: '16:00', breakMin: 0 })).ok, true);
+assert.strictEqual(L.validateRec(worked({ mode: 'hours', hours: 0.001 })).ok, false, 'hours that round to 0 are refused');
+assert.strictEqual(L.validateRec(worked({ mode: 'hours', hours: 0.001 })).error, 'Dit komt uit op 0 uur. Controleer de tijden.');
+assert.strictEqual(L.validateRec(worked({ mode: 'hours', hours: 0.01 })).ok, true);
 assert.strictEqual(L.validateRec({ date: '2026-11-11', kind: 'ziek', note: '' }).ok, true);
 assert.strictEqual(L.validateRec({ date: '2026-11-11', kind: 'onbekend', note: '' }).ok, false);
 assert.strictEqual(L.validateRec({ date: '2026-11-11', kind: 'onbekend', note: '' }).error, 'Kies een reden.');
@@ -153,6 +159,43 @@ assert.deepStrictEqual(L.KINDS.map((k) => k.label), ['Vrij', 'Ziek', 'Vakantie',
   assert.deepStrictEqual(Object.keys(up.days), ['2026-11-09'], 'bad keys, unknown kinds and mismatched dates are dropped');
   assert.strictEqual(up.lastBackup, null);
   assert.ok(up.firstUse && up.prefs && up.prefs.breakMin === 30);
+}
+
+// ---- review: kapotte of handgemaakte data mag de app nooit leeg of kapot maken ----
+{
+  const good = { date: '2026-11-09', kind: 'gewerkt', mode: 'hours', hours: 8, note: '' };
+  // verkeerde soorten velden naast een goede dag: geen fout, goede dag blijft
+  let up;
+  assert.doesNotThrow(() => { up = L.upgradeData({ days: { '2026-11-09': good }, lastBackup: 20261101, firstUse: {}, prefs: { start: 800, end: null, breakMin: 'x' } }); });
+  assert.strictEqual(up.lastBackup, null, 'a number is not a backup date');
+  assert.ok(L.validDate(up.firstUse), 'firstUse is repaired to a real date');
+  assert.deepStrictEqual(up.prefs, { start: '08:00', end: '17:00', breakMin: 30 }, 'broken prefs fall back to defaults');
+  assert.strictEqual(L.recHours(up.days['2026-11-09']), 8);
+  assert.strictEqual(L.upgradeData({ days: { '2026-11-09': good }, lastBackup: '2026-11-01', firstUse: '2026-10-01', prefs: { start: '09:00', end: '18:00', breakMin: 45 } }).prefs.breakMin, 45, 'good prefs are kept');
+  assert.strictEqual(L.upgradeData({ days: { '2026-11-09': good }, lastBackup: '2026-11-01', firstUse: '2026-10-01' }).lastBackup, '2026-11-01', 'a good date is kept');
+
+  // kapotte dagen vallen weg zonder fout, de rest blijft
+  const messy = { days: {
+    '2026-11-01': good && { date: '2026-11-01', kind: 'gewerkt', mode: 'times', start: 800, end: '16:00', breakMin: 30, note: '' },
+    '2026-11-02': null,
+    '2026-11-03': 'tekst',
+    '2026-11-04': { date: '2026-11-04', kind: 'Ziek', note: '' },
+    '2026-11-05': { date: '2026-11-05', kind: 'gewerkt', mode: 'hours', hours: '7,5', note: '' },
+    '2026-11-06': { date: '2026-11-06', kind: 'gewerkt', mode: 'hours', hours: '8', note: '' },
+    '2026-11-07': { date: '2026-11-07', kind: 'gewerkt', mode: 'hours', hours: { x: 1 }, note: '' },
+    '2026-11-08': { date: '2026-11-08', kind: 'gewerkt', mode: 'times', start: '08:00', end: '16:00', breakMin: -30, note: 5 },
+  } };
+  assert.doesNotThrow(() => { up = L.upgradeData(messy); });
+  assert.deepStrictEqual(Object.keys(up.days), ['2026-11-04', '2026-11-05', '2026-11-06', '2026-11-08'], 'only readable days stay');
+  assert.strictEqual(up.days['2026-11-04'].kind, 'ziek', 'odd casing is repaired, not dropped');
+  assert.strictEqual(up.days['2026-11-05'].hours, 7.5, 'a string with a comma is read');
+  assert.strictEqual(up.days['2026-11-06'].hours, 8);
+  assert.strictEqual(up.days['2026-11-08'].breakMin, 0, 'a negative pause in old data counts as none');
+  assert.strictEqual(up.days['2026-11-08'].note, '', 'a note that is not text becomes empty');
+  assert.doesNotThrow(() => L.upgradeData({ days: 'kapot' }), 'days that is not an object does not throw');
+  assert.deepStrictEqual(L.upgradeData({ days: 'kapot' }).days, {});
+  assert.doesNotThrow(() => L.monthSummary(up, '2026-11'));
+  assert.doesNotThrow(() => L.csvForMonth(up, '2026-11'));
 }
 
 console.log('Alle tests zijn goed.');

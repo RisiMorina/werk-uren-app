@@ -19,10 +19,13 @@
     return { version: 1, days: {}, lastBackup: null, firstUse: L.todayISO(), prefs: { start: '08:00', end: '17:00', breakMin: 30 } };
   }
   function load() {
-    try {
-      var raw = localStorage.getItem(KEY);
-      if (raw) { var d = JSON.parse(raw); if (L.isValidData(d)) return L.upgradeData(d); }
-    } catch (e) { /* kapot of geen toegang: begin leeg */ }
+    var raw = null;
+    try { raw = localStorage.getItem(KEY); } catch (e) { /* geen toegang */ }
+    if (raw) {
+      try { var d = JSON.parse(raw); if (L.isValidData(d)) return L.upgradeData(d); } catch (e) { /* hieronder: bewaren */ }
+      // Wat we niet kunnen lezen bewaren we apart, zodat het volgende opslaan het niet wist.
+      try { localStorage.setItem(KEY + '-onleesbaar', raw); } catch (e) { /* niet erg */ }
+    }
     return emptyData();
   }
   var data = load();
@@ -343,7 +346,7 @@
       var d;
       try { d = JSON.parse(rd.result); } catch (e) { d = null; }
       if (!L.isValidData(d)) { toast('Dit bestand is geen back-up van Mijn uren.', 'fout'); return; }
-      d = L.upgradeData(d);
+      try { d = L.upgradeData(d); } catch (e) { toast('Dit bestand is geen back-up van Mijn uren.', 'fout'); return; }
       confirmBox('Back-up terugzetten?', 'Dit vervangt alles wat nu in de app staat (' + Object.keys(data.days).length + ' dagen) door de back-up (' + Object.keys(d.days).length + ' dagen).', 'Ja, terugzetten', true).then(function (ok) {
         if (!ok) return;
         try { localStorage.setItem(KEY + '-voor-terugzetten', JSON.stringify(data)); } catch (e) { /* niet erg */ }

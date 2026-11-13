@@ -26,12 +26,13 @@ record: { date, kind: "gewerkt"|"vrij"|"ziek"|"vakantie"|"feestdag", note,
 ```
 
 - **Eén record per datum.** Opnieuw invullen vervangt hem, na een bevestiging. `setDay` bewaart alleen wat bij de soort hoort, dus er blijven nooit oude uren of tijden hangen als je van gewerkt naar een reden wisselt.
+- Data inlezen kan nooit de app kapot maken: `upgradeData` herstelt of laat weg wat niet leesbaar is (een dag met verkeerde velden valt weg, een hoofdletter in de soort wordt hersteld, uren als tekst met komma worden gelezen, kapotte voorkeuren worden de standaard). Is de hele opgeslagen tekst onleesbaar, dan blijft hij bewaard onder `mijn-uren-v1-onleesbaar` en start de app leeg, zodat het volgende opslaan hem niet wist.
 - Bij het terugzetten van een back-up wordt de oude data eerst bewaard onder `mijn-uren-v1-voor-terugzetten`. Een bestand dat geen back-up is wordt geweigerd en verandert niets.
 - Back-up herinnering: banner als de laatste back-up (of eerste gebruik) meer dan 14 dagen geleden is en er dagen zijn ingevuld.
 
 ## Regels in de code
 
-- Niet opgeslagen: 0 uur, meer dan 24 uur, begin of eind ontbreekt, geen reden gekozen. Een pauze is hele minuten en nooit negatief (`cleanBreak`). Over middernacht (22:00 tot 06:00) telt op de begindatum.
+- Niet opgeslagen: 0 uur (ook als het door afronden 0 wordt, bijvoorbeeld 0,001), meer dan 24 uur, begin of eind ontbreekt, geen reden gekozen, een negatieve pauze (met de melding "De pauze kan niet negatief zijn."). Een pauze is hele minuten (`cleanBreak`; in oude of handgemaakte data telt een negatieve pauze als geen pauze). Over middernacht (22:00 tot 06:00) telt op de begindatum.
 - Weken volgens ISO, maandag eerst. Datums zijn altijd lokale `YYYY-MM-DD`, nooit UTC.
 - Aan de randen van een maand telt een week alleen de uren van de dagen in die maand en staat er "(deel van de week)". Week 53 komt in december en in januari voor.
 - Dagen in de toekomst mogen (vakantie vooruit zetten); ze zijn lichter getekend. Alleen dagen met uren tellen als gewerkt.
